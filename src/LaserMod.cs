@@ -33,8 +33,12 @@ public class LaserMod : SonsMod
     private void Tick()
     {
         bool held = LineTool.IsHeld;
+        // gameplay = mouse captured; while any UI (inventory/book/pause) owns the cursor, clicks
+        // must not plant stakes
+        bool gameplay = Cursor.lockState == CursorLockMode.Locked;
 
-        if (Input.GetKeyDown(KeyCode.L) && held) LaserLine.DropPoint();
+        if (held && gameplay && (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.L)))
+            LaserLine.DropPoint();
 
         if (Input.GetKeyDown(KeyCode.K))
         {
@@ -45,6 +49,6 @@ public class LaserMod : SonsMod
 
         if (Input.GetKeyDown(KeyCode.J)) LaserLine.Clear();
 
-        LaserLine.UpdateGhost(held);
+        LaserLine.UpdateGhost(held && gameplay);
     }
 }

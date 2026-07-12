@@ -1,5 +1,7 @@
+using Endnight.Utilities;
 using RedLoader;
 using Sons.Crafting;
+using Sons.Inventory;
 using Sons.Items.Core;
 using SonsSdk;
 using TheForest.Items.Inventory;
@@ -62,6 +64,7 @@ internal static class LineTool
             builder.AddInventoryItem();
             builder.AddCraftingResultItem();
             builder.SetupHeld();
+            FixupInventoryInteraction();
             EnsureRecipe();
 
             Ready = true;
@@ -169,6 +172,41 @@ internal static class LineTool
             if (ropeMat != null) knot.GetComponent<Renderer>().sharedMaterial = ropeMat;
             knot.transform.localScale = Vector3.one * 0.5f;
             knot.transform.localPosition = new Vector3(0f, 0.16f, 0f);
+        }
+    }
+
+    /// <summary>ItemBuilder.AddInventoryItem wires no collider/layer/mouse-proxy onto the model
+    /// (the SDK only does that in InitInventoryModelReplacement), so the item shows on the mat but
+    /// the inventory camera can't hover-pop or click-select it. Replicate that wiring here.</summary>
+    private static void FixupInventoryInteraction()
+    {
+        var group = ItemTools.GetInventoryLayoutItemGroup(ItemId);
+        if (group == null) { RLog.Warning("[BuildingLaser] no inventory layout group to fix up"); return; }
+        int layer = LayerMask.NameToLayer("Inventory");
+
+        var items = group._layoutItems;
+        for (int i = 0; i < items.Count; i++)
+        {
+            var li = items[i];
+            var slot = li.transform.Find("ItemRenderable");
+            if (slot == null || slot.childCount == 0) continue;
+            var model = slot.GetChild(0).gameObject;   // our BuildModelPrefab instance
+
+            model.layer = layer;
+            if (model.GetComponent<BoxCollider>() == null)
+            {
+                var box = model.AddComponent<BoxCollider>();
+                box.center = Vector3.zero;
+                box.size = new Vector3(0.14f, 0.52f, 0.14f);   // covers stake + knot
+            }
+            if (model.GetComponent<MouseEventsProxy>() == null)
+            {
+                var proxy = model.AddComponent<MouseEventsProxy>();
+                var target = li;
+                proxy._mouseEnterEvent.AddListener((System.Action)target.OnMouseEnter);
+                proxy._mouseOverEvent.AddListener((System.Action)target.OnMouseOver);
+                proxy._mouseExitEvent.AddListener((System.Action)target.OnMouseExit);
+            }
         }
     }
 
