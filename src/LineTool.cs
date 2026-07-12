@@ -204,7 +204,7 @@ internal static class LineTool
     // a slight tilt and enlarge it so it's findable among full-size items. Held-in-hand keeps upright
     // (matDisplay=false), which the user already approved.
     private static readonly Vector3 MatDisplayEuler = new Vector3(74f, 0f, 16f);
-    private const float MatDisplayScale = 3.4f;
+    private const float MatDisplayScale = 1.4f;   // layout item already scales up ~1.7x; keep this modest
 
     /// <summary>Small stake (wood cylinder) with a rope knot at the top — the tool's look.
     /// matDisplay=true nests the visual under a wrapper laid flat + enlarged for the inventory mat.</summary>
