@@ -93,7 +93,7 @@ internal static class LineTool
         // throws a managed exception inside the native physics callback -> NATIVE CRASH under
         // IL2CPP/Wine (crash 2026-07-13, Player.log ReportContacts/ClosestPoint spam). Raising this
         // makes the overflow-drop far rarer; BuildPickupTemplate also strips the crash component.
-        data._maxAmount = 5;
+        data._maxAmount = 20;
         data._uiData._itemId = ItemId;
         data._uiData._title = "Builder's String Line";
         data._uiData._translationKey = null;
@@ -194,14 +194,32 @@ internal static class LineTool
     {
         var root = new GameObject(name);
         Object.DontDestroyOnLoad(root);
-        AddStakeVisual(root.transform, keepTriggerCollider: true);
+        AddStakeVisual(root.transform, keepTriggerCollider: true, matDisplay: true);
         root.transform.position = new Vector3(0f, -2000f, 0f);
         return root;
     }
 
-    /// <summary>Small stake (wood cylinder) with a rope knot at the top — the tool's look.</summary>
-    private static void AddStakeVisual(Transform parent, bool keepTriggerCollider = false)
+    // Mat-display orientation/scale (live-tunable via the StakeVisual wrapper). The inventory mat is
+    // viewed near-top-down, so an upright stake reads as a tiny end-on dot. Lay it along the mat with
+    // a slight tilt and enlarge it so it's findable among full-size items. Held-in-hand keeps upright
+    // (matDisplay=false), which the user already approved.
+    private static readonly Vector3 MatDisplayEuler = new Vector3(74f, 0f, 16f);
+    private const float MatDisplayScale = 3.4f;
+
+    /// <summary>Small stake (wood cylinder) with a rope knot at the top — the tool's look.
+    /// matDisplay=true nests the visual under a wrapper laid flat + enlarged for the inventory mat.</summary>
+    private static void AddStakeVisual(Transform parent, bool keepTriggerCollider = false, bool matDisplay = false)
     {
+        Transform host = parent;
+        if (matDisplay)
+        {
+            var wrapper = new GameObject("StakeVisual");
+            wrapper.transform.SetParent(parent, false);
+            wrapper.transform.localRotation = Quaternion.Euler(MatDisplayEuler);
+            wrapper.transform.localScale = Vector3.one * MatDisplayScale;
+            host = wrapper.transform;
+        }
+
         var stake = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         stake.name = "Stake";
         var col = stake.GetComponent<Collider>();
@@ -210,7 +228,7 @@ internal static class LineTool
             if (keepTriggerCollider) col.isTrigger = true;
             else Object.DestroyImmediate(col);
         }
-        stake.transform.SetParent(parent, false);
+        stake.transform.SetParent(host, false);
         stake.transform.localScale = new Vector3(0.045f, 0.22f, 0.045f);   // 44cm long stake
         stake.transform.localPosition = Vector3.zero;
         var wood = LaserLine.WoodMat();
@@ -222,7 +240,7 @@ internal static class LineTool
         if (knotMesh != null)
         {
             var knot = new GameObject("Knot");
-            knot.transform.SetParent(parent, false);
+            knot.transform.SetParent(host, false);
             knot.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
             knot.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
             knot.GetComponent<MeshFilter>().mesh = knotMesh;
