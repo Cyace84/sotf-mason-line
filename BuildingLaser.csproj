@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>BuildingLaser</AssemblyName>
+    <RootNamespace>BuildingLaser</RootNamespace>
+    <Version>0.1.0</Version>
+    <Description>A straight guide line for Sons of the Forest: the build ghost of a free log snaps to it, so the first log of a wall lays dead-straight.</Description>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <_LibDll Include="lib\*.dll" />
+    <Reference Include="@(_LibDll->'%(Filename)')">
+      <HintPath>%(_LibDll.FullPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

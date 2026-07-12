@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ToniMacaroni/RedLoader/main/MetadataSchema.json",
+  "id": "BuildingLaser",
+  "author": "cyace",
+  "version": "0.1.0",
+  "description": "A straight guide line for building. Press L to lay a laser from your aim, K to toggle snap; the build ghost of a free log then sticks to the line so the first log lays dead-straight.",
+  "type": "Mod",
+  "gameVersion": "2.0.0",
+  "url": "https://github.com/Cyace84/sotf-building-laser"
+}
