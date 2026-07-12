@@ -34,10 +34,14 @@ internal static class PlacePatch
         // get warped too, narrow this to active module == PlaceBeamOnGroundModule.
         if (!__instance.IsTerrain) return;
 
+        // Only capture placements that are actually AT the string (≤2m sideways, between the
+        // stakes). Anything else on the map must build vanilla — an armed line is not a magnet.
+        if (!LaserLine.TryProject(__instance.PlacePosition, out var snapped)) return;
+
         _busy = true;
         try
         {
-            __instance.SetPlacePosition(LaserLine.Project(__instance.PlacePosition));
+            __instance.SetPlacePosition(snapped);
             // Orient the log along the line. If it comes out perpendicular, swap to Cross(up, Dir).
             __instance.SetPlaceAxis(LaserLine.Dir);
         }

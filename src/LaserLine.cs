@@ -141,6 +141,12 @@ internal static class LaserLine
         RLog.Msg(System.ConsoleColor.Yellow, "[BuildingLaser] line cleared");
     }
 
+    /// <summary>Snap capture zone: max sideways distance (m) from the string for a placement to
+    /// be pulled onto it; beyond that the build is unrelated — leave it vanilla.</summary>
+    private const float SnapRadius = 2.0f;
+    /// <summary>How far (m) past a stake the snap zone extends along the line.</summary>
+    private const float SnapEndMargin = 1.0f;
+
     /// <summary>Project a world point onto the infinite line in XZ, keeping the point's own height.</summary>
     public static Vector3 Project(Vector3 p)
     {
@@ -148,6 +154,22 @@ internal static class LaserLine
         float d = Vector3.Dot(rel, Dir);
         var c = Origin + Dir * d;
         return new Vector3(c.x, p.y, c.z);
+    }
+
+    /// <summary>Project only if the point is actually NEAR the strung segment (within
+    /// <see cref="SnapRadius"/> sideways and between the stakes ±<see cref="SnapEndMargin"/>).
+    /// Placements elsewhere on the map must stay vanilla — an armed line is not a magnet.</summary>
+    public static bool TryProject(Vector3 p, out Vector3 projected)
+    {
+        projected = p;
+        var rel = p - Origin; rel.y = 0f;
+        float d = Vector3.Dot(rel, Dir);
+        if (d < -SnapEndMargin || d > _segLen + SnapEndMargin) return false;   // beyond the stakes
+        var c = Origin + Dir * d;
+        float lateralSq = (rel - Dir * d).sqrMagnitude;
+        if (lateralSq > SnapRadius * SnapRadius) return false;                 // too far sideways
+        projected = new Vector3(c.x, p.y, c.z);
+        return true;
     }
 
     /// <summary>Per-frame: translucent ghost stake at the aim point while defining the line
