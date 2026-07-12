@@ -87,7 +87,13 @@ internal static class LineTool
         data._id = ItemId;
         data._name = "BuildersLine";
         data._editorName = "BuildersLine";
-        data._maxAmount = 1;
+        // maxAmount MUST be >1: at 1, a second craft overflows and DROPS the item as a world
+        // pickup. The dropped pickup carries ObjectPhysicsInteractionSfx; when it rests on the
+        // non-convex BackpackGroundMesh hull the game's TryTriggerHardSurfaceImpact -> ClosestPoint
+        // throws a managed exception inside the native physics callback -> NATIVE CRASH under
+        // IL2CPP/Wine (crash 2026-07-13, Player.log ReportContacts/ClosestPoint spam). Raising this
+        // makes the overflow-drop far rarer; BuildPickupTemplate also strips the crash component.
+        data._maxAmount = 5;
         data._uiData._itemId = ItemId;
         data._uiData._title = "Builder's String Line";
         data._uiData._translationKey = null;
@@ -98,7 +104,11 @@ internal static class LineTool
         if (outline != null) data._uiData._outlineIcon = outline;
 
         data._heldPrefab = BuildHeldTemplate(tpl._heldPrefab);
-        // _pickupPrefab stays the GPS one (only matters if the item is dropped on the ground; v1 ok)
+        // Replace the GPS pickup with a crash-safe clone: the GPS pickup carries
+        // ObjectPhysicsInteractionSfx, which native-crashes the game when the dropped item touches
+        // the non-convex backpack mesh (see _maxAmount note + BuildPickupTemplate).
+        var safePickup = BuildPickupTemplate(tpl._pickupPrefab);
+        if (safePickup != null) data._pickupPrefab = safePickup;
 
         ItemTools.RegisterItem(data);
     }
@@ -128,10 +138,50 @@ internal static class LineTool
         for (int i = clone.transform.childCount - 1; i >= 0; i--)
             Object.DestroyImmediate(clone.transform.GetChild(i).gameObject);
         AddStakeVisual(clone.transform);
+        StripImpactSfx(clone);   // defensive: no crash component rides along from the GPS clone
 
         clone.transform.position = new Vector3(0f, -2000f, 0f);   // parked out of sight
         clone.SetActive(true);   // template must be active: instantiated copies inherit the state
         return clone.transform;
+    }
+
+    /// <summary>Crash-safe pickup: inactive-clone the GPS pickup (so no GPS Awake runs), then strip
+    /// ObjectPhysicsInteractionSfx. That component's OnCollisionEnter/OnTriggerEnter ->
+    /// TryTriggerHardSurfaceImpact -> Physics.ClosestPoint throws on a non-convex MeshCollider
+    /// (BackpackGroundMesh partial hull); the managed throw crosses the native physics callback and
+    /// native-crashes the game under IL2CPP/Wine. Decompile: Sons.Gameplay.ObjectPhysicsInteractionSfx.
+    /// Verified crash trace: Player.log OnSceneContact -> ReportContacts -> TryTriggerHardSurfaceImpact
+    /// -> "Physics.ClosestPoint can only be used with ... convex MeshCollider" (2026-07-13).</summary>
+    private static Transform? BuildPickupTemplate(Transform? gpsPickup)
+    {
+        if (gpsPickup == null) return null;
+        var src = gpsPickup.gameObject;
+        bool wasActive = src.activeSelf;
+        src.SetActive(false);                       // restored right after — vanilla GPS unaffected
+        var clone = Object.Instantiate(src);
+        src.SetActive(wasActive);
+
+        clone.name = "BuildersLinePickup";
+        Object.DontDestroyOnLoad(clone);
+        StripImpactSfx(clone);
+
+        clone.transform.position = new Vector3(0f, -2000f, 0f);   // parked template
+        return clone.transform;
+    }
+
+    /// <summary>DestroyImmediate every ObjectPhysicsInteractionSfx in the object tree (name-match,
+    /// no hard type ref). This is the component whose ClosestPoint call native-crashes on the
+    /// non-convex backpack mesh — our GPS-derived clones must not carry it.</summary>
+    private static void StripImpactSfx(GameObject root)
+    {
+        if (root == null) return;
+        var comps = root.GetComponentsInChildren(Il2CppInterop.Runtime.Il2CppType.Of<Component>(), true);
+        foreach (var c in comps)
+        {
+            if (c == null) continue;
+            if (c.GetIl2CppType().Name == "ObjectPhysicsInteractionSfx")
+                Object.DestroyImmediate(c);
+        }
     }
 
     /// <summary>Model prefab for the inventory mat / crafting result display (active, parked).
