@@ -24,7 +24,11 @@ internal static class LaserLine
 
     private static bool _haveA;
     private static Vector3 _pointA;
+    private static Vector3 _groundB;
     private static float _segLen = 20f;
+
+    /// <summary>Aim distance (m) to a stake base that counts as "looking at it" for C-collect.</summary>
+    private const float CollectAimRadius = 0.45f;
 
     private const float StakeHeight = 1.1f;
     private const float StakeRadius = 0.05f;
@@ -101,13 +105,28 @@ internal static class LaserLine
         Dir = dir.normalized;
         // keep B at its OWN ground height (stake sits on the ground even on a slope)
         _segLen = new Vector2(p.x - _pointA.x, p.z - _pointA.z).magnitude;
+        _groundB = p;
         HasLine = true;
         _haveA = false;
+        SnapActive = true;   // the line is there to be used — arm the snap immediately (K toggles off)
 
         EnsureStake(ref _stakeB, "BuildingLaserStakeB");
         PlaceStake(_stakeB!, p);
         BuildRope(_pointA, p);
-        RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line set, {_segLen:0.0}m (snap={SnapActive})");
+        RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line set, {_segLen:0.0}m — snap ON (K toggles, C on a stake collects)");
+    }
+
+    /// <summary>Is the crosshair pointing at one of the planted stakes? (Stakes carry no
+    /// colliders, so this is an aim-point proximity test against the stake bases.)</summary>
+    public static bool AimingAtStake()
+    {
+        if (!HasLine && !_haveA) return false;
+        if (!TryAimPoint(out var p)) return false;
+        if (_haveA && (p - _pointA).sqrMagnitude < CollectAimRadius * CollectAimRadius) return true;
+        if (HasLine &&
+            ((p - Origin).sqrMagnitude < CollectAimRadius * CollectAimRadius ||
+             (p - _groundB).sqrMagnitude < CollectAimRadius * CollectAimRadius)) return true;
+        return false;
     }
 
     public static void Clear()

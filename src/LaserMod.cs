@@ -49,6 +49,9 @@ public class LaserMod : SonsMod
 
         if (Input.GetKeyDown(KeyCode.J)) LaserLine.Clear();
 
+        // C on a stake = collect the line back (vanilla-dismantle feel); J stays as global clear
+        if (gameplay && Input.GetKeyDown(KeyCode.C) && LaserLine.AimingAtStake()) LaserLine.Clear();
+
         LaserLine.UpdateGhost(held && gameplay);
     }
 }
