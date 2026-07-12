@@ -1,4 +1,3 @@
-using Endnight.Utilities;
 using RedLoader;
 using Sons.Crafting;
 using Sons.Inventory;
@@ -64,7 +63,6 @@ internal static class LineTool
             builder.AddInventoryItem();
             builder.AddCraftingResultItem();
             builder.SetupHeld();
-            FixupInventoryInteraction();
             EnsureRecipe();
 
             Ready = true;
@@ -136,23 +134,32 @@ internal static class LineTool
         return clone.transform;
     }
 
-    /// <summary>Model prefab for the inventory mat / crafting result display (active, parked).</summary>
+    /// <summary>Model prefab for the inventory mat / crafting result display (active, parked).
+    /// keepTriggerCollider=true: the game's own LayoutItem.RefreshInteractionComponents (decompile
+    /// 0x1831E8DA0) wires Inventory layer + MouseEventsProxy onto every renderer GO itself, but it
+    /// expects a COLLIDER to already exist on the renderable for hover/click raycasts. A TRIGGER
+    /// collider is mandatory — a plain one physically contacts BackpackGroundMesh and the contact-
+    /// SFX spam crashes the game (crash 2026-07-12).</summary>
     private static GameObject BuildModelPrefab(string name)
     {
         var root = new GameObject(name);
         Object.DontDestroyOnLoad(root);
-        AddStakeVisual(root.transform);
+        AddStakeVisual(root.transform, keepTriggerCollider: true);
         root.transform.position = new Vector3(0f, -2000f, 0f);
         return root;
     }
 
     /// <summary>Small stake (wood cylinder) with a rope knot at the top — the tool's look.</summary>
-    private static void AddStakeVisual(Transform parent)
+    private static void AddStakeVisual(Transform parent, bool keepTriggerCollider = false)
     {
         var stake = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         stake.name = "Stake";
         var col = stake.GetComponent<Collider>();
-        if (col != null) Object.DestroyImmediate(col);
+        if (col != null)
+        {
+            if (keepTriggerCollider) col.isTrigger = true;
+            else Object.DestroyImmediate(col);
+        }
         stake.transform.SetParent(parent, false);
         stake.transform.localScale = new Vector3(0.045f, 0.22f, 0.045f);   // 44cm long stake
         stake.transform.localPosition = Vector3.zero;
@@ -172,41 +179,6 @@ internal static class LineTool
             if (ropeMat != null) knot.GetComponent<Renderer>().sharedMaterial = ropeMat;
             knot.transform.localScale = Vector3.one * 0.5f;
             knot.transform.localPosition = new Vector3(0f, 0.16f, 0f);
-        }
-    }
-
-    /// <summary>ItemBuilder.AddInventoryItem wires no collider/layer/mouse-proxy onto the model
-    /// (the SDK only does that in InitInventoryModelReplacement), so the item shows on the mat but
-    /// the inventory camera can't hover-pop or click-select it. Replicate that wiring here.</summary>
-    private static void FixupInventoryInteraction()
-    {
-        var group = ItemTools.GetInventoryLayoutItemGroup(ItemId);
-        if (group == null) { RLog.Warning("[BuildingLaser] no inventory layout group to fix up"); return; }
-        int layer = LayerMask.NameToLayer("Inventory");
-
-        var items = group._layoutItems;
-        for (int i = 0; i < items.Count; i++)
-        {
-            var li = items[i];
-            var slot = li.transform.Find("ItemRenderable");
-            if (slot == null || slot.childCount == 0) continue;
-            var model = slot.GetChild(0).gameObject;   // our BuildModelPrefab instance
-
-            model.layer = layer;
-            if (model.GetComponent<BoxCollider>() == null)
-            {
-                var box = model.AddComponent<BoxCollider>();
-                box.center = Vector3.zero;
-                box.size = new Vector3(0.14f, 0.52f, 0.14f);   // covers stake + knot
-            }
-            if (model.GetComponent<MouseEventsProxy>() == null)
-            {
-                var proxy = model.AddComponent<MouseEventsProxy>();
-                var target = li;
-                proxy._mouseEnterEvent.AddListener((System.Action)target.OnMouseEnter);
-                proxy._mouseOverEvent.AddListener((System.Action)target.OnMouseOver);
-                proxy._mouseExitEvent.AddListener((System.Action)target.OnMouseExit);
-            }
         }
     }
 
