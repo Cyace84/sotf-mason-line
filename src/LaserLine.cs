@@ -46,7 +46,7 @@ internal static class LaserLine
     private static GameObject? _knotB;
     private static GameObject? _stakeA;
     private static GameObject? _stakeB;
-    private static GameObject? _aim;
+    private static GameObject? _ghost;
 
     private static Material? _woodMat;
     private static bool _woodTried;
@@ -131,15 +131,16 @@ internal static class LaserLine
         return new Vector3(c.x, p.y, c.z);
     }
 
-    /// <summary>Per-frame: show the aim dot while defining the line (aiming A, or B after A).</summary>
-    public static void UpdateAimDot()
+    /// <summary>Per-frame: translucent ghost stake at the aim point while defining the line
+    /// (aiming A, or B after A) — shows exactly where the stake will be planted.</summary>
+    public static void UpdateGhost(bool toolHeld)
     {
-        bool aiming = !HasLine || _haveA;
-        if (!aiming) { if (_aim != null) _aim.SetActive(false); return; }
-        if (!TryAimPoint(out var p)) { if (_aim != null) _aim.SetActive(false); return; }
-        EnsureAimDot();
-        _aim!.SetActive(true);
-        _aim.transform.position = p;
+        bool aiming = toolHeld && (!HasLine || _haveA);
+        if (!aiming) { if (_ghost != null) _ghost.SetActive(false); return; }
+        if (!TryAimPoint(out var p)) { if (_ghost != null) _ghost.SetActive(false); return; }
+        EnsureGhost();
+        _ghost!.SetActive(true);
+        _ghost.transform.position = p + Vector3.up * (StakeHeight * 0.5f);
     }
 
     /// <summary>Snap cue: tint the rope material instance (warm = armed, grey = off). HDRP may ignore
@@ -282,21 +283,22 @@ internal static class LaserLine
         stake.transform.rotation = Quaternion.identity;
     }
 
-    private static void EnsureAimDot()
+    /// <summary>Ghost = stake-sized translucent cylinder (construction-ghost blue).</summary>
+    private static void EnsureGhost()
     {
-        if (_aim != null) return;
-        _aim = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        _aim.name = "BuildingLaserAim";
-        Object.DontDestroyOnLoad(_aim);
-        var col = _aim.GetComponent<Collider>();
+        if (_ghost != null) return;
+        _ghost = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        _ghost.name = "BuildingLaserGhost";
+        Object.DontDestroyOnLoad(_ghost);
+        var col = _ghost.GetComponent<Collider>();
         if (col != null) Object.Destroy(col);
-        _aim.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
-        TintRenderer(_aim, new Color(1f, 0.85f, 0.2f));
+        _ghost.transform.localScale = new Vector3(StakeRadius * 2f, StakeHeight * 0.5f, StakeRadius * 2f);
+        TintRenderer(_ghost, new Color(0.55f, 0.8f, 1f, 0.35f));
     }
 
     // ---- game-asset fetchers (cached) ----
 
-    private static Material? WoodMat()
+    internal static Material? WoodMat()
     {
         if (_woodTried) return _woodMat;
         _woodTried = true;
@@ -312,7 +314,7 @@ internal static class LaserLine
         return _woodMat;
     }
 
-    private static Material? RopeMaterial()
+    internal static Material? RopeMaterial()
     {
         if (_ropeMatTried) return _ropeMat;
         _ropeMatTried = true;
@@ -321,7 +323,7 @@ internal static class LaserLine
         return _ropeMat;
     }
 
-    private static Mesh? KnotMesh()
+    internal static Mesh? KnotMesh()
     {
         if (_knotMeshTried) return _knotMesh;
         _knotMeshTried = true;
