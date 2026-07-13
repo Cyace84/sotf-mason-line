@@ -1,4 +1,5 @@
 using HarmonyLib;
+using RedLoader;
 using Sons.Gameplay;
 using UnityEngine;
 
@@ -29,11 +30,29 @@ namespace BuildingLaser;
 [HarmonyPatch(typeof(ObjectPhysicsInteractionSfx), nameof(ObjectPhysicsInteractionSfx.TryTriggerHardSurfaceImpact))]
 internal static class HardSurfaceImpactCrashGuard
 {
+    // Instrumentation: prove the prefix actually runs (a native physics-callback caller could bypass
+    // the managed Harmony detour). If the loader log shows these lines AND Player.log has no
+    // "ClosestPoint can only be used with ... convex" warnings, the guard is live and effective.
+    private static int _skipped;
+    private static bool _loggedActive;
+
     private static bool Prefix(Collider impactCollider)
     {
+        if (!_loggedActive)
+        {
+            _loggedActive = true;
+            RLog.Msg(System.ConsoleColor.DarkYellow, "[BuildingLaser] crash-guard ACTIVE (TryTriggerHardSurfaceImpact prefix is running)");
+        }
         if (impactCollider == null) return true;
         var mesh = impactCollider.TryCast<MeshCollider>();
-        if (mesh != null && !mesh.convex) return false;   // ClosestPoint would throw → native crash
+        if (mesh != null && !mesh.convex)
+        {
+            if (_skipped < 3)
+                RLog.Msg(System.ConsoleColor.DarkYellow,
+                    $"[BuildingLaser] crash-guard: skipped hard-surface SFX on non-convex mesh '{impactCollider.name}' (would crash via ClosestPoint) #{_skipped + 1}");
+            _skipped++;
+            return false;   // ClosestPoint would throw → native crash
+        }
         return true;
     }
 }
