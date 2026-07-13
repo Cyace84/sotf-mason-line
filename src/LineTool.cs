@@ -64,22 +64,8 @@ internal static class LineTool
             // SDK AddInventoryItem() with NO position clones the DevilsClub(449) group and never sets
             // localPosition -> our group lands ON TOP of DevilsClub in the herbs area, buried/invisible
             // (decompile SonsSdk ItemBuilder.AddInventoryItem: positions[0] = group localPosition).
-            // Place it beside the Stick(392) group instead. Positions are read live and LOGGED so the
-            // offset can be refined from Latest.log (the live eval channel is latched this session).
-            LogInvGroupPos("stick392", StickId);
-            LogInvGroupPos("rope403", RopeId);
-            LogInvGroupPos("devilsClub449", 449);
-            if (TryGetInvGroupLocalPos(StickId, out var stickPos))
-            {
-                var ourPos = stickPos + new Vector3(0.12f, 0f, 0f);   // beside the sticks (offset guess)
-                builder.AddInventoryItem(ourPos);
-                RLog.Msg(System.ConsoleColor.Cyan, $"[BuildingLaser] inv group placed beside Stick(392): our={ourPos:F3}");
-            }
-            else
-            {
-                builder.AddInventoryItem();
-                RLog.Warning("[BuildingLaser] Stick(392) inv group not found — item placed at default (may hide in DevilsClub)");
-            }
+            // Live-tuned (tune.sh) to sit in the tools/spears zone: mat plane = X,Z ; up = Y.
+            builder.AddInventoryItem(new Vector3(1.18f, 0.01f, 0.9f));
             builder.AddCraftingResultItem();
             builder.SetupHeld();
             EnsureRecipe();
@@ -93,28 +79,6 @@ internal static class LineTool
             Ready = false;
             RLog.Error($"[BuildingLaser] item setup failed (hotkeys stay ungated): {ex}");
         }
-    }
-
-    /// <summary>Find a vanilla inventory layout group by item id and read its local position
-    /// (groups are siblings under InventoryLayoutGroups, so localPositions are comparable).</summary>
-    private static bool TryGetInvGroupLocalPos(int itemId, out Vector3 localPos)
-    {
-        localPos = Vector3.zero;
-        var arr = Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<InventoryLayoutItemGroup>());
-        foreach (var o in arr)
-        {
-            var g = o.TryCast<InventoryLayoutItemGroup>();
-            if (g != null && g._itemId == itemId) { localPos = g.transform.localPosition; return true; }
-        }
-        return false;
-    }
-
-    private static void LogInvGroupPos(string label, int itemId)
-    {
-        if (TryGetInvGroupLocalPos(itemId, out var p))
-            RLog.Msg(System.ConsoleColor.DarkCyan, $"[BuildingLaser] refpos {label}({itemId}) localPos={p:F3}");
-        else
-            RLog.Msg(System.ConsoleColor.DarkGray, $"[BuildingLaser] refpos {label}({itemId}) NOT FOUND");
     }
 
     /// <summary>App-lifetime work: ItemData + held template survive world reloads (DontDestroyOnLoad).</summary>
@@ -247,7 +211,11 @@ internal static class LineTool
     // Lay the stake FLAT in the mat plane (horizontal). At identity the cylinder's long axis (local Y)
     // points along the mat normal -> end-on top-down (invisible dot); 90° about X drops it into the
     // plane so it reads as a stake and doesn't dip its base into the mat/other items. Live-tunable.
-    private static readonly Vector3 MatDisplayEuler = new Vector3(90f, 0f, 0f);
+    // Live-tuned (tune.sh) so the INVENTORY browse model reads world-euler ~(90,10,0) — stake lying
+    // flat on the mat, long axis "up" the screen like the spears/tools. This local euler is relative
+    // to the DevilsClub-derived layout-item frame; the crafting-result popup (different parent frame)
+    // inherits the same local euler and will differ — tune that separately if it bothers.
+    private static readonly Vector3 MatDisplayEuler = new Vector3(84f, 234f, 357f);
     private const float MatDisplayScale = 1.4f;   // layout item already scales up ~1.7x; keep this modest
 
     /// <summary>Small stake (wood cylinder) with a rope knot at the top — the tool's look.

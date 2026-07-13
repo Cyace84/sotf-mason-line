@@ -33,6 +33,14 @@ internal static class LaserLine
     private const float StakeHeight = 1.1f;
     private const float StakeRadius = 0.05f;
     private const float TieHeight = StakeHeight - 0.12f;
+    // Real-branch stake (live-tuned via tune.sh to match the in-game StandingStickElement):
+    // mesh BranchABMeshLOD0 (long axis = local Z) + material BranchA, non-uniform scale — thin X/Y,
+    // long Z — stood upright with a 90°-about-X rotation. Fallback = the old wooden cylinder.
+    private const float StakeThick = 1.96f;
+    private const float StakeLong = 2.7f;
+    // Rope/knot tie point relative to the aimed ground point: knot sits 0.75 above the stake GO,
+    // which itself sits StakeHeight*0.5 above ground, +0.02 world-X nudge (all user-tuned).
+    private static readonly Vector3 TieOffset = new Vector3(0.02f, StakeHeight * 0.5f + 0.75f, 0f);
     private const float RopeRadius = 0.018f;
     private const int RopeSides = 8;
     /// <summary>UV v-units per meter along the rope. Live-tuned 2026-07-06 against the knot mesh
@@ -41,7 +49,7 @@ internal static class LaserLine
     private const float RopeVPerMeter = 0.15f;
     private const int RopeSegments = 24;
     private const float SagFraction = 0.06f;
-    private const float KnotScale = 0.7f;
+    private const float KnotScale = 0.8f;
 
     private static readonly Color WoodColor = new Color(0.40f, 0.27f, 0.15f);
 
@@ -58,6 +66,10 @@ internal static class LaserLine
     private static bool _ropeMatTried;
     private static Mesh? _knotMesh;
     private static bool _knotMeshTried;
+    private static Mesh? _stakeMesh;
+    private static bool _stakeMeshTried;
+    private static Material? _stakeMat;
+    private static bool _stakeMatTried;
 
     private const int AimMask = ~((1 << 29) | (1 << 14));
 
@@ -197,8 +209,8 @@ internal static class LaserLine
 
     private static void BuildRope(Vector3 groundA, Vector3 groundB)
     {
-        var tieA = groundA + Vector3.up * TieHeight;
-        var tieB = groundB + Vector3.up * TieHeight;
+        var tieA = groundA + TieOffset;
+        var tieB = groundB + TieOffset;
         float span = Vector3.Distance(tieA, tieB);
         float sag = span * SagFraction;
 
@@ -306,6 +318,21 @@ internal static class LaserLine
     private static void EnsureStake(ref GameObject? stake, string name)
     {
         if (stake != null) { stake.SetActive(true); return; }
+        var mesh = StakeMesh();
+        if (mesh != null)
+        {
+            stake = new GameObject(name);
+            Object.DontDestroyOnLoad(stake);
+            stake.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
+            stake.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
+            stake.GetComponent<MeshFilter>().mesh = mesh;
+            var mat = StakeMat();
+            if (mat != null) stake.GetComponent<Renderer>().sharedMaterial = mat;
+            stake.transform.localScale = new Vector3(StakeThick, StakeThick, StakeLong);
+            stake.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // branch long axis (local Z) -> upright
+            return;
+        }
+        // fallback: the old wooden cylinder (long axis = Y, so no upright rotation needed)
         stake = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         stake.name = name;
         Object.DontDestroyOnLoad(stake);
@@ -321,18 +348,31 @@ internal static class LaserLine
     {
         stake.SetActive(true);
         stake.transform.position = ground + Vector3.up * (StakeHeight * 0.5f);
-        stake.transform.rotation = Quaternion.identity;
+        // rotation is set once in EnsureStake (upright for branch, identity for the cylinder fallback)
     }
 
-    /// <summary>Ghost = stake-sized translucent cylinder (construction-ghost blue).</summary>
+    /// <summary>Ghost = a translucent copy of the branch stake at the aim point.</summary>
     private static void EnsureGhost()
     {
         if (_ghost != null) return;
+        var mesh = StakeMesh();
+        if (mesh != null)
+        {
+            _ghost = new GameObject("BuildingLaserGhost");
+            Object.DontDestroyOnLoad(_ghost);
+            _ghost.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
+            _ghost.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
+            _ghost.GetComponent<MeshFilter>().mesh = mesh;
+            _ghost.transform.localScale = new Vector3(StakeThick, StakeThick, StakeLong);
+            _ghost.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            TintRenderer(_ghost, new Color(0.55f, 0.8f, 1f, 0.35f));
+            return;
+        }
         _ghost = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         _ghost.name = "BuildingLaserGhost";
         Object.DontDestroyOnLoad(_ghost);
-        var col = _ghost.GetComponent<Collider>();
-        if (col != null) Object.Destroy(col);
+        var gcol = _ghost.GetComponent<Collider>();
+        if (gcol != null) Object.Destroy(gcol);
         _ghost.transform.localScale = new Vector3(StakeRadius * 2f, StakeHeight * 0.5f, StakeRadius * 2f);
         TintRenderer(_ghost, new Color(0.55f, 0.8f, 1f, 0.35f));
     }
@@ -371,6 +411,25 @@ internal static class LaserLine
         _knotMesh = FindByName<Mesh>("RopeLogAKnotMeshLOD0");
         if (_knotMesh == null) RLog.Warning("[BuildingLaser] knot mesh not found");
         return _knotMesh;
+    }
+
+    /// <summary>The in-game branch mesh used for the standing-stick look (StandingStickElement).</summary>
+    internal static Mesh? StakeMesh()
+    {
+        if (_stakeMeshTried) return _stakeMesh;
+        _stakeMeshTried = true;
+        _stakeMesh = FindByName<Mesh>("BranchABMeshLOD0");
+        if (_stakeMesh == null) RLog.Warning("[BuildingLaser] BranchABMeshLOD0 not found — using cylinder fallback");
+        return _stakeMesh;
+    }
+
+    internal static Material? StakeMat()
+    {
+        if (_stakeMatTried) return _stakeMat;
+        _stakeMatTried = true;
+        _stakeMat = FindByName<Material>("BranchA");
+        if (_stakeMat == null) RLog.Warning("[BuildingLaser] BranchA material not found");
+        return _stakeMat;
     }
 
     private static T? FindByName<T>(string name) where T : Object
