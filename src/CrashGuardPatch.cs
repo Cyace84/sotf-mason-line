@@ -34,6 +34,7 @@ internal static class HardSurfaceImpactCrashGuard
     // the managed Harmony detour). If the loader log shows these lines AND Player.log has no
     // "ClosestPoint can only be used with ... convex" warnings, the guard is live and effective.
     private static int _skipped;
+    private static int _swallowed;
     private static bool _loggedActive;
 
     private static bool Prefix(Collider impactCollider)
@@ -45,14 +46,49 @@ internal static class HardSurfaceImpactCrashGuard
         }
         if (impactCollider == null) return true;
         var mesh = impactCollider.TryCast<MeshCollider>();
-        if (mesh != null && !mesh.convex)
+        if (mesh != null)
         {
-            if (_skipped < 3)
-                RLog.Msg(System.ConsoleColor.DarkYellow,
-                    $"[BuildingLaser] crash-guard: skipped hard-surface SFX on non-convex mesh '{impactCollider.name}' (would crash via ClosestPoint) #{_skipped + 1}");
-            _skipped++;
-            return false;   // ClosestPoint would throw → native crash
+            // Two bad cases, one skip:
+            // (1) non-convex MeshCollider — ClosestPoint throws a MANAGED exception (Finalizer would
+            //     catch it, prefix saves the throw entirely);
+            // (2) convex==true but the hull was COOKED PARTIAL — source mesh over the 256-polygon
+            //     cook limit ("Couldn't create a Convex Mesh ... partial hull will be used",
+            //     BackpackGroundMesh / LogAMeshLOD0 / Tuxedo...). ClosestPoint on the degenerate hull
+            //     dies INSIDE native PhysX — no managed exception, Finalizer useless, process gone.
+            //     That was the 2026-07-16 02:06 crash: click crafted item → contact with backpack mat →
+            //     silence in Latest.log, cook warning as Player.log's last line.
+            //     Runtime proxy for "partial": vertexCount > 256 — may skip SFX on some healthy hulls
+            //     too, which costs a sound, never a crash.
+            bool nonConvex = !mesh.convex;
+            var sm = mesh.sharedMesh;
+            bool partialHull = !nonConvex && sm != null && sm.vertexCount > 256;
+            if (nonConvex || partialHull)
+            {
+                if (_skipped < 6)
+                    RLog.Msg(System.ConsoleColor.DarkYellow,
+                        $"[BuildingLaser] crash-guard: skipped hard-surface SFX on {(nonConvex ? "non-convex" : "partial-hull")} mesh '{impactCollider.name}' (would crash via ClosestPoint) #{_skipped + 1}");
+                _skipped++;
+                return false;   // ClosestPoint would throw / native-crash
+            }
         }
         return true;
+    }
+
+    // Belt-and-suspenders: the prefix only skips MeshCollider.convex==false, but BackpackGroundMesh is
+    // a PARTIAL HULL — convex==true yet ClosestPoint still throws ("Couldn't create a Convex Mesh ...
+    // within the maximum polygons limit"). Any managed exception escaping this method crosses the
+    // native physics callback and native-crashes the process (crash on clicking an inventory item,
+    // 2026-07-14). A Harmony finalizer that returns null SWALLOWS whatever the body threw, for every
+    // collider type — the throw never reaches native. Cost = one unplayed impact SFX.
+    private static System.Exception? Finalizer(System.Exception? __exception)
+    {
+        if (__exception != null)
+        {
+            if (_swallowed < 3)
+                RLog.Msg(System.ConsoleColor.DarkYellow,
+                    $"[BuildingLaser] crash-guard: swallowed {__exception.GetType().Name} in TryTriggerHardSurfaceImpact (would native-crash) #{_swallowed + 1}");
+            _swallowed++;
+        }
+        return null;   // suppress → nothing propagates to the native callback
     }
 }
