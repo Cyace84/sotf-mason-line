@@ -17,15 +17,35 @@ namespace BuildingLaser;
 /// </summary>
 internal static class LaserLine
 {
-    public static bool HasLine;
+    /// <summary>One placed string line: geometry + its own world visuals. Kit economy: 1 kit =
+    /// 1 line, so several crafted kits = several simultaneous lines (user bug 2026-07-17: the old
+    /// static singleton allowed only one line in the world).</summary>
+    private sealed class Line
+    {
+        public Vector3 Origin;      // ground point A
+        public Vector3 Dir;         // horizontal, normalized
+        public Vector3 GroundB;
+        public float SegLen;
+        public GameObject? StakeA, StakeB, Rope, KnotA, KnotB;
+
+        public void Destroy()
+        {
+            if (StakeA != null) Object.Destroy(StakeA);
+            if (StakeB != null) Object.Destroy(StakeB);
+            if (Rope != null) Object.Destroy(Rope);
+            if (KnotA != null) Object.Destroy(KnotA);
+            if (KnotB != null) Object.Destroy(KnotB);
+        }
+    }
+
+    private static readonly System.Collections.Generic.List<Line> _lines = new();
+
+    public static bool HasLine => _lines.Count > 0;
     public static bool SnapActive;
-    public static Vector3 Origin;
-    public static Vector3 Dir = Vector3.forward;
 
     private static bool _haveA;
     private static Vector3 _pointA;
-    private static Vector3 _groundB;
-    private static float _segLen = 20f;
+    private static GameObject? _pendingStake;   // stake A of the line being defined
 
     /// <summary>Aim distance (m) to a stake base that counts as "looking at it" for C-collect.</summary>
     // 0.45 was too tight to hit without a visual cue (user 2026-07-16); with the ShowMessage prompt
@@ -59,11 +79,6 @@ internal static class LaserLine
 
     private static readonly Color WoodColor = new Color(0.40f, 0.27f, 0.15f);
 
-    private static GameObject? _ropeGo;
-    private static GameObject? _knotA;
-    private static GameObject? _knotB;
-    private static GameObject? _stakeA;
-    private static GameObject? _stakeB;
     private static GameObject? _ghost;
 
     private static Material? _woodMat;
@@ -93,9 +108,15 @@ internal static class LaserLine
         return false;
     }
 
-    /// <summary>L: drop the next defining point. First press = A (stake), second = B (stake + rope).</summary>
+    /// <summary>L: drop the next defining point. First press = A (stake), second = B (stake + rope).
+    /// Each completed line consumes one kit; with no kit in the inventory nothing plants.</summary>
     public static void DropPoint()
     {
+        if (!_haveA && !LineTool.HasKit())
+        {
+            RLog.Warning("[BuildingLaser] no string line kit in the inventory — craft another (stick + rope)");
+            return;
+        }
         if (!TryAimPoint(out var p))
         {
             RLog.Warning("[BuildingLaser] no surface under the crosshair to plant the stake");
@@ -106,8 +127,8 @@ internal static class LaserLine
         {
             _pointA = p;
             _haveA = true;
-            EnsureStake(ref _stakeA, "BuildingLaserStakeA");
-            PlaceStake(_stakeA!, p);
+            _pendingStake = CreateStake("BuildingLaserStakeA");
+            PlaceStake(_pendingStake, p);
             PlayPlaceSound(p);
             RLog.Msg(System.ConsoleColor.Green, "[BuildingLaser] stake A planted — aim the far end and press L again");
             return;
@@ -120,21 +141,26 @@ internal static class LaserLine
             return;
         }
 
-        Origin = _pointA;
-        Dir = dir.normalized;
-        // keep B at its OWN ground height (stake sits on the ground even on a slope)
-        _segLen = new Vector2(p.x - _pointA.x, p.z - _pointA.z).magnitude;
-        _groundB = p;
-        HasLine = true;
+        var line = new Line
+        {
+            Origin = _pointA,
+            Dir = dir.normalized,
+            // keep B at its OWN ground height (stake sits on the ground even on a slope)
+            SegLen = new Vector2(p.x - _pointA.x, p.z - _pointA.z).magnitude,
+            GroundB = p,
+            StakeA = _pendingStake,
+        };
+        _pendingStake = null;
         _haveA = false;
-        SnapActive = true;   // the line is there to be used — arm the snap immediately (K toggles off)
 
-        EnsureStake(ref _stakeB, "BuildingLaserStakeB");
-        PlaceStake(_stakeB!, p);
+        line.StakeB = CreateStake("BuildingLaserStakeB");
+        PlaceStake(line.StakeB, p);
         PlayPlaceSound(p);
-        BuildRope(_pointA, p);
+        BuildRope(line);
+        _lines.Add(line);
+        SnapActive = true;   // the line is there to be used — arm the snap immediately (K toggles off)
         LineTool.ConsumeKit();   // kit economy: the placed line IS the kit — it leaves the inventory
-        RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line set, {_segLen:0.0}m — snap ON (K toggles, C on a stake collects)");
+        RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line #{_lines.Count} set, {line.SegLen:0.0}m — snap ON (K toggles, C on a stake collects)");
     }
 
     /// <summary>Is the crosshair pointing at one of the planted stakes? Vanilla-style: the game
@@ -145,8 +171,14 @@ internal static class LaserLine
     private const float CollectReach = 2.5f;          // camera-to-stick reach (vanilla 2.475)
     private const float CollectCastRadius = 0.2f;     // vanilla sphere-cast radius
 
+    private static Line? _aimedLine;        // line whose stake the crosshair is on (this frame)
+    private static bool _aimedPending;      // aiming the not-yet-completed stake A
+    private static Vector3 _aimedPos;       // ground point of the aimed stake (sound anchor)
+
     public static bool AimingAtStake()
     {
+        _aimedLine = null;
+        _aimedPending = false;
         if (!HasLine && !_haveA) return false;
         var cam = Camera.main;
         if (cam == null) return false;
@@ -155,10 +187,15 @@ internal static class LaserLine
         float hit = CollectCastRadius + StakeRadius;
         float hit2 = hit * hit;
 
-        if (_haveA && SegSegDistSqr(o, e, _pointA, _pointA + Vector3.up * StakeHeight) < hit2) return true;
-        if (HasLine &&
-            (SegSegDistSqr(o, e, Origin, Origin + Vector3.up * StakeHeight) < hit2 ||
-             SegSegDistSqr(o, e, _groundB, _groundB + Vector3.up * StakeHeight) < hit2)) return true;
+        if (_haveA && SegSegDistSqr(o, e, _pointA, _pointA + Vector3.up * StakeHeight) < hit2)
+        { _aimedPending = true; _aimedPos = _pointA; return true; }
+        foreach (var ln in _lines)
+        {
+            if (SegSegDistSqr(o, e, ln.Origin, ln.Origin + Vector3.up * StakeHeight) < hit2)
+            { _aimedLine = ln; _aimedPos = ln.Origin; return true; }
+            if (SegSegDistSqr(o, e, ln.GroundB, ln.GroundB + Vector3.up * StakeHeight) < hit2)
+            { _aimedLine = ln; _aimedPos = ln.GroundB; return true; }
+        }
         return false;
     }
 
@@ -193,6 +230,7 @@ internal static class LaserLine
     // hold progress). Rotation-only jitter around the stakes' settled rotation: the stake BASES don't
     // move, so AimingAtStake stays stable during the hold. A short C TAP = decaying nudge (vanilla
     // gives a kick per press even if you let go).
+    private static GameObject? _shakeStakeA, _shakeStakeB;   // stakes captured at shake/nudge start
     private static Quaternion _shakeBaseA, _shakeBaseB;
     private static Vector3 _shakePosA, _shakePosB;
     private static bool _shaking;
@@ -252,29 +290,34 @@ internal static class LaserLine
 
     private static void CaptureShakeBases()
     {
-        if (_stakeA != null) { _shakeBaseA = _stakeA.transform.rotation; _shakePosA = _stakeA.transform.position; }
-        if (_stakeB != null) { _shakeBaseB = _stakeB.transform.rotation; _shakePosB = _stakeB.transform.position; }
+        // shake the AIMED target only: the pending stake alone, or both stakes of the aimed line
+        _shakeStakeA = _aimedPending ? _pendingStake : _aimedLine?.StakeA;
+        _shakeStakeB = _aimedPending ? null : _aimedLine?.StakeB;
+        if (_shakeStakeA != null) { _shakeBaseA = _shakeStakeA.transform.rotation; _shakePosA = _shakeStakeA.transform.position; }
+        if (_shakeStakeB != null) { _shakeBaseB = _shakeStakeB.transform.rotation; _shakePosB = _shakeStakeB.transform.position; }
     }
 
     private static void ApplyJitter(Quaternion jitter, Vector3 offset)
     {
-        if (_stakeA != null && _stakeA.activeSelf)
-        { _stakeA.transform.rotation = _shakeBaseA * jitter; _stakeA.transform.position = _shakePosA + offset; }
-        if (_stakeB != null && _stakeB.activeSelf)
-        { _stakeB.transform.rotation = _shakeBaseB * jitter; _stakeB.transform.position = _shakePosB + offset; }
+        if (_shakeStakeA != null)
+        { _shakeStakeA.transform.rotation = _shakeBaseA * jitter; _shakeStakeA.transform.position = _shakePosA + offset; }
+        if (_shakeStakeB != null)
+        { _shakeStakeB.transform.rotation = _shakeBaseB * jitter; _shakeStakeB.transform.position = _shakePosB + offset; }
     }
 
     private static void RestoreShakeBases()
     {
-        if (_stakeA != null) { _stakeA.transform.rotation = _shakeBaseA; _stakeA.transform.position = _shakePosA; }
-        if (_stakeB != null) { _stakeB.transform.rotation = _shakeBaseB; _stakeB.transform.position = _shakePosB; }
+        if (_shakeStakeA != null) { _shakeStakeA.transform.rotation = _shakeBaseA; _shakeStakeA.transform.position = _shakePosA; }
+        if (_shakeStakeB != null) { _shakeStakeB.transform.rotation = _shakeBaseB; _shakeStakeB.transform.position = _shakePosB; }
+        _shakeStakeA = null;
+        _shakeStakeB = null;
     }
 
     public static void Shake(float t)
     {
-        if (_stakeA == null && _stakeB == null) return;
         if (!_shaking)
         {
+            if (_aimedLine == null && !_aimedPending) return;
             _shaking = true;
             if (_nudgeT < 0f) CaptureShakeBases();   // a nudge already captured settled bases
             _nudgeT = -1f;
@@ -301,7 +344,7 @@ internal static class LaserLine
     public static void Nudge()
     {
         if (_shaking) return;
-        if (_stakeA == null && _stakeB == null) return;
+        if (_aimedLine == null && !_aimedPending) return;
         if (_nudgeT < 0f) CaptureShakeBases();        // only capture from a settled pose
         _nudgeT = 0f;
     }
@@ -333,38 +376,50 @@ internal static class LaserLine
     /// (user A/B test 2026-07-17: correct creak, must fire on hold, not on completion).</summary>
     public static void PlayWobbleSound()
     {
-        try
-        {
-            var pos = HasLine ? Origin : _pointA;
-            FMODCommon.PlayOneshot("event:/SotF Events/player sounds/Build Sounds/build_log_wobble", pos);
-        }
+        try { FMODCommon.PlayOneshot("event:/SotF Events/player sounds/Build Sounds/build_log_wobble", _aimedPos); }
         catch { }
     }
 
     /// <summary>Pull-out completion: the inventory stick-pickup thud (user 2026-07-17: the foley
     /// 'new_pickups/pickup_sticks' is the loud ground-sticks grab — wrong; the dull ending is the
     /// Inv pickup).</summary>
-    public static void PlayCollectSound()
+    private static void PlayCollectSound(Vector3 pos)
     {
-        try
-        {
-            var pos = HasLine ? Origin : _pointA;
-            FMODCommon.PlayOneshot("event:/SotF Events/player sounds/Inv/Pickups/pickup_Stick", pos);
-        }
+        try { FMODCommon.PlayOneshot("event:/SotF Events/player sounds/Inv/Pickups/pickup_Stick", pos); }
         catch { }
     }
 
+    /// <summary>Hold-C completed: pull out the AIMED line (kit back) or cancel the pending stake A
+    /// (nothing was consumed yet). Other lines stay standing.</summary>
+    public static void CollectAimed()
+    {
+        if (_aimedPending)
+        {
+            if (_pendingStake != null) Object.Destroy(_pendingStake);
+            _pendingStake = null;
+            _haveA = false;
+            PlayCollectSound(_aimedPos);
+            RLog.Msg(System.ConsoleColor.Yellow, "[BuildingLaser] pending stake removed");
+            return;
+        }
+        if (_aimedLine == null) return;
+        _aimedLine.Destroy();
+        _lines.Remove(_aimedLine);
+        _aimedLine = null;
+        LineTool.RefundKit();
+        PlayCollectSound(_aimedPos);
+        RLog.Msg(System.ConsoleColor.Yellow, $"[BuildingLaser] line collected — {_lines.Count} still standing");
+    }
+
+    /// <summary>J: tear down EVERYTHING — all lines (one kit refunded each) + the pending stake.</summary>
     public static void Clear()
     {
-        LineTool.RefundKit();    // no-op unless a completed line consumed the kit
-        HasLine = false;
+        foreach (var ln in _lines) { ln.Destroy(); LineTool.RefundKit(); }
+        _lines.Clear();
+        if (_pendingStake != null) Object.Destroy(_pendingStake);
+        _pendingStake = null;
         _haveA = false;
-        if (_ropeGo != null) _ropeGo.SetActive(false);
-        if (_knotA != null) _knotA.SetActive(false);
-        if (_knotB != null) _knotB.SetActive(false);
-        if (_stakeA != null) _stakeA.SetActive(false);
-        if (_stakeB != null) _stakeB.SetActive(false);
-        RLog.Msg(System.ConsoleColor.Yellow, "[BuildingLaser] line cleared");
+        RLog.Msg(System.ConsoleColor.Yellow, "[BuildingLaser] all lines cleared");
     }
 
     /// <summary>Snap capture zone: max sideways distance (m) from the string for a placement to
@@ -373,28 +428,29 @@ internal static class LaserLine
     /// <summary>How far (m) past a stake the snap zone extends along the line.</summary>
     private const float SnapEndMargin = 1.0f;
 
-    /// <summary>Project a world point onto the infinite line in XZ, keeping the point's own height.</summary>
-    public static Vector3 Project(Vector3 p)
-    {
-        var rel = p - Origin; rel.y = 0f;
-        float d = Vector3.Dot(rel, Dir);
-        var c = Origin + Dir * d;
-        return new Vector3(c.x, p.y, c.z);
-    }
-
-    /// <summary>Project only if the point is actually NEAR the strung segment (within
+    /// <summary>Project only if the point is actually NEAR a strung segment (within
     /// <see cref="SnapRadius"/> sideways and between the stakes ±<see cref="SnapEndMargin"/>).
-    /// Placements elsewhere on the map must stay vanilla — an armed line is not a magnet.</summary>
-    public static bool TryProject(Vector3 p, out Vector3 projected)
+    /// With several lines standing, the laterally-nearest one wins. Placements elsewhere on the
+    /// map must stay vanilla — an armed line is not a magnet.</summary>
+    public static bool TryProject(Vector3 p, out Vector3 projected, out Vector3 dir)
     {
         projected = p;
-        var rel = p - Origin; rel.y = 0f;
-        float d = Vector3.Dot(rel, Dir);
-        if (d < -SnapEndMargin || d > _segLen + SnapEndMargin) return false;   // beyond the stakes
-        var c = Origin + Dir * d;
-        float lateralSq = (rel - Dir * d).sqrMagnitude;
-        if (lateralSq > SnapRadius * SnapRadius) return false;                 // too far sideways
+        dir = Vector3.forward;
+        Line? best = null;
+        float bestLatSq = float.MaxValue, bestD = 0f;
+        foreach (var ln in _lines)
+        {
+            var rel = p - ln.Origin; rel.y = 0f;
+            float d = Vector3.Dot(rel, ln.Dir);
+            if (d < -SnapEndMargin || d > ln.SegLen + SnapEndMargin) continue;   // beyond the stakes
+            float latSq = (rel - ln.Dir * d).sqrMagnitude;
+            if (latSq > SnapRadius * SnapRadius || latSq >= bestLatSq) continue; // too far sideways
+            best = ln; bestLatSq = latSq; bestD = d;
+        }
+        if (best == null) return false;
+        var c = best.Origin + best.Dir * bestD;
         projected = new Vector3(c.x, p.y, c.z);
+        dir = best.Dir;
         return true;
     }
 
@@ -402,7 +458,8 @@ internal static class LaserLine
     /// (aiming A, or B after A) — shows exactly where the stake will be planted.</summary>
     public static void UpdateGhost(bool toolHeld)
     {
-        bool aiming = toolHeld && (!HasLine || _haveA);
+        // ghost shows while finishing a line (B pending) or when another kit is ready to start one
+        bool aiming = toolHeld && (_haveA || LineTool.HasKit());
         if (!aiming) { if (_ghost != null) _ghost.SetActive(false); return; }
         if (!TryAimPoint(out var p)) { if (_ghost != null) _ghost.SetActive(false); return; }
         EnsureGhost();
@@ -449,17 +506,20 @@ internal static class LaserLine
     /// .color; harmless if so (the K-toggle also logs state).</summary>
     public static void RefreshRopeCue()
     {
-        if (_ropeGo == null || !HasLine) return;
-        var rend = _ropeGo.GetComponent<Renderer>();
-        if (rend != null) rend.material.color = SnapActive ? Color.white : new Color(0.6f, 0.6f, 0.6f);
+        foreach (var ln in _lines)
+        {
+            if (ln.Rope == null) continue;
+            var rend = ln.Rope.GetComponent<Renderer>();
+            if (rend != null) rend.material.color = SnapActive ? Color.white : new Color(0.6f, 0.6f, 0.6f);
+        }
     }
 
     // ---- rope: one continuous tube mesh along a catenary ----
 
-    private static void BuildRope(Vector3 groundA, Vector3 groundB)
+    private static void BuildRope(Line line)
     {
-        var tieA = groundA + TieOffset;
-        var tieB = groundB + TieOffset;
+        var tieA = line.Origin + TieOffset;
+        var tieB = line.GroundB + TieOffset;
         float span = Vector3.Distance(tieA, tieB);
         float sag = span * SagFraction;
 
@@ -482,29 +542,26 @@ internal static class LaserLine
             path[i] = pt;
         }
 
-        var mesh = BuildTube(path, RopeRadius, RopeSides);
+        var mesh = BuildTube(path, RopeRadius, RopeSides, line.Dir);
 
-        if (_ropeGo == null)
-        {
-            _ropeGo = new GameObject("BuildingLaserRopeMesh");
-            Object.DontDestroyOnLoad(_ropeGo);
-            _ropeGo.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
-            _ropeGo.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
-        }
-        _ropeGo.SetActive(true);
-        _ropeGo.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-        _ropeGo.GetComponent<MeshFilter>().mesh = mesh;
+        var ropeGo = new GameObject("BuildingLaserRopeMesh");
+        Object.DontDestroyOnLoad(ropeGo);
+        ropeGo.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
+        ropeGo.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
+        ropeGo.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+        ropeGo.GetComponent<MeshFilter>().mesh = mesh;
         var rmat = RopeMaterial();
-        var rr = _ropeGo.GetComponent<Renderer>();
+        var rr = ropeGo.GetComponent<Renderer>();
         if (rmat != null) rr.material = new Material(rmat);   // instance so tint doesn't touch the shared mat
+        line.Rope = ropeGo;
 
-        PlaceKnot(ref _knotA, "BuildingLaserKnotA", tieA);
-        PlaceKnot(ref _knotB, "BuildingLaserKnotB", tieB);
+        line.KnotA = MakeKnot("BuildingLaserKnotA", tieA, line.Dir);
+        line.KnotB = MakeKnot("BuildingLaserKnotB", tieB, line.Dir);
         RefreshRopeCue();
     }
 
     /// <summary>Build one smooth tube mesh (world-space) following a path; smooth normals = no seams.</summary>
-    private static Mesh BuildTube(Vector3[] path, float radius, int sides)
+    private static Mesh BuildTube(Vector3[] path, float radius, int sides, Vector3 fallbackDir)
     {
         int n = path.Length;
         int ring = sides + 1;
@@ -514,7 +571,7 @@ internal static class LaserLine
         for (int i = 0; i < n; i++)
         {
             var tan = path[Mathf.Min(i + 1, n - 1)] - path[Mathf.Max(i - 1, 0)];
-            if (tan.sqrMagnitude < 1e-8f) tan = Dir;
+            if (tan.sqrMagnitude < 1e-8f) tan = fallbackDir;
             tan = tan.normalized;
             var nor = Vector3.Cross(tan, Vector3.up);
             if (nor.sqrMagnitude < 1e-6f) nor = Vector3.Cross(tan, Vector3.forward);
@@ -553,34 +610,30 @@ internal static class LaserLine
         return m;
     }
 
-    private static void PlaceKnot(ref GameObject? knot, string name, Vector3 pos)
+    private static GameObject? MakeKnot(string name, Vector3 pos, Vector3 dir)
     {
         var km = KnotMesh();
-        if (km == null) return;
-        if (knot == null)
-        {
-            knot = new GameObject(name);
-            Object.DontDestroyOnLoad(knot);
-            knot.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
-            knot.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
-            knot.GetComponent<MeshFilter>().mesh = km;
-            var rmat = RopeMaterial();
-            if (rmat != null) knot.GetComponent<Renderer>().sharedMaterial = rmat;
-            knot.transform.localScale = Vector3.one * KnotScale;
-        }
-        knot.SetActive(true);
-        knot.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(Dir, Vector3.up));
+        if (km == null) return null;
+        var knot = new GameObject(name);
+        Object.DontDestroyOnLoad(knot);
+        knot.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
+        knot.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
+        knot.GetComponent<MeshFilter>().mesh = km;
+        var rmat = RopeMaterial();
+        if (rmat != null) knot.GetComponent<Renderer>().sharedMaterial = rmat;
+        knot.transform.localScale = Vector3.one * KnotScale;
+        knot.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(dir, Vector3.up));
+        return knot;
     }
 
     // ---- stakes + aim dot ----
 
-    private static void EnsureStake(ref GameObject? stake, string name)
+    private static GameObject CreateStake(string name)
     {
-        if (stake != null) { stake.SetActive(true); return; }
         var mesh = StakeMesh();
         if (mesh != null)
         {
-            stake = new GameObject(name);
+            var stake = new GameObject(name);
             Object.DontDestroyOnLoad(stake);
             stake.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
             stake.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
@@ -589,23 +642,23 @@ internal static class LaserLine
             if (mat != null) stake.GetComponent<Renderer>().sharedMaterial = mat;
             stake.transform.localScale = new Vector3(StakeThick, StakeThick, StakeLong);
             stake.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // branch long axis (local Z) -> upright
-            return;
+            return stake;
         }
         // fallback: the old wooden cylinder (long axis = Y, so no upright rotation needed)
-        stake = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        stake.name = name;
-        Object.DontDestroyOnLoad(stake);
-        var col = stake.GetComponent<Collider>();
+        var cyl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        cyl.name = name;
+        Object.DontDestroyOnLoad(cyl);
+        var col = cyl.GetComponent<Collider>();
         if (col != null) Object.Destroy(col);
-        stake.transform.localScale = new Vector3(StakeRadius * 2f, StakeHeight * 0.5f, StakeRadius * 2f);
+        cyl.transform.localScale = new Vector3(StakeRadius * 2f, StakeHeight * 0.5f, StakeRadius * 2f);
         var wood = WoodMat();
-        if (wood != null) { var r = stake.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = wood; }
-        else TintRenderer(stake, WoodColor);
+        if (wood != null) { var r = cyl.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = wood; }
+        else TintRenderer(cyl, WoodColor);
+        return cyl;
     }
 
     private static void PlaceStake(GameObject stake, Vector3 ground)
     {
-        stake.SetActive(true);
         stake.transform.position = ground + Vector3.up * (StakeHeight * 0.5f);
         // rotation is set once in EnsureStake (upright for branch, identity for the cylinder fallback)
     }

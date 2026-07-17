@@ -110,42 +110,64 @@ internal static class LineTool
     // A marker file survives a game restart so a saved-with-line-out inventory gets the kit back
     // (the line itself is not in the save). Signatures observed: PlayerInventory.AddItem/RemoveItem/
     // AmountOf decompile 2026-07-16.
-    private static bool _kitConsumed;
+    private static int _kitsOut;   // kits currently staked out as standing lines (multi-line 2026-07-17)
     private static string KitMarkerPath =>
         System.IO.Path.Combine(Application.persistentDataPath, "BuildingLaser.line-out");
 
-    /// <summary>Line completed (stake B planted): take the kit out of the inventory. No-op when the
-    /// pipeline is down (dev fallback) or a previous line is being replaced (net: one line = one kit).</summary>
+    private static void WriteKitMarker()
+    {
+        try
+        {
+            if (_kitsOut <= 0) System.IO.File.Delete(KitMarkerPath);
+            else System.IO.File.WriteAllText(KitMarkerPath, _kitsOut.ToString());
+        }
+        catch { }
+    }
+
+    /// <summary>Is a kit available to start a new line? Pipeline-down (dev fallback) = always yes.</summary>
+    public static bool HasKit()
+    {
+        if (!Ready) return true;
+        try
+        {
+            var inv = LocalPlayer.Inventory;
+            return inv == null || inv.AmountOf(ItemId) > 0;
+        }
+        catch { return true; }
+    }
+
+    /// <summary>Line completed (stake B planted): take ONE kit out of the inventory. Several kits
+    /// = several simultaneous lines. No-op when the pipeline is down (dev fallback).</summary>
     public static void ConsumeKit()
     {
-        if (!Ready || _kitConsumed) return;
+        if (!Ready) return;
         try
         {
             var inv = LocalPlayer.Inventory;
             if (inv == null) return;
             if (inv.RemoveItem(ItemId, 1, false, true, true, null, true))
             {
-                _kitConsumed = true;
-                try { System.IO.File.WriteAllText(KitMarkerPath, "1"); } catch { }
-                RLog.Msg(System.ConsoleColor.Yellow, "[BuildingLaser] kit staked out — collect the line (C) to get it back");
+                _kitsOut++;
+                WriteKitMarker();
+                RLog.Msg(System.ConsoleColor.Yellow, $"[BuildingLaser] kit staked out ({_kitsOut} in the field) — collect the line (C) to get it back");
             }
             else RLog.Warning("[BuildingLaser] kit consume failed (RemoveItem=false) — line placed anyway");
         }
         catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit consume failed: {ex.Message}"); }
     }
 
-    /// <summary>Line collected/cleared: put the kit back. Gated by the consume flag, so a J with only
-    /// point A planted (nothing consumed yet) refunds nothing.</summary>
+    /// <summary>One line collected/cleared: put ONE kit back. Gated by the out-counter, so a C on
+    /// a lone pending stake (nothing consumed yet) refunds nothing.</summary>
     public static void RefundKit()
     {
-        if (!_kitConsumed) return;
+        if (_kitsOut <= 0) return;
         try
         {
             var inv = LocalPlayer.Inventory;
             if (inv != null && inv.AddItem(ItemId))
             {
-                _kitConsumed = false;
-                try { System.IO.File.Delete(KitMarkerPath); } catch { }
+                _kitsOut--;
+                WriteKitMarker();
                 FixRenderableLoadedFlags();   // re-add touches the layout item; make sure its renderable is safe
                 RLog.Msg(System.ConsoleColor.Green, "[BuildingLaser] kit returned to the inventory");
             }
@@ -154,21 +176,27 @@ internal static class LineTool
         catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit refund failed: {ex.Message}"); }
     }
 
-    /// <summary>World load: if a previous run left the kit staked out (marker) but the line did not
-    /// survive (fresh process — stakes are DDoL, so they DO survive an in-process reload), give the
-    /// kit back — but only when the loaded save has ZERO kits. A save made BEFORE placing already
-    /// contains the kit; refunding on top of it would dupe.</summary>
+    /// <summary>World load: if a previous run left kits staked out (marker = count) but the lines did
+    /// not survive (fresh process — stakes are DDoL, so they DO survive an in-process reload), give
+    /// the kits back — but only when the loaded save has ZERO kits. A save made BEFORE placing
+    /// already contains the kit; refunding on top of it would dupe.</summary>
     private static void RefundOrphanedKit()
     {
         try
         {
             if (!System.IO.File.Exists(KitMarkerPath)) return;
-            if (LaserLine.HasLine) { _kitConsumed = true; return; }   // in-process reload, line still standing
+            int n = 1;
+            try { int.TryParse(System.IO.File.ReadAllText(KitMarkerPath).Trim(), out n); } catch { }
+            if (n < 1) n = 1;
+            if (LaserLine.HasLine) { _kitsOut = n; return; }   // in-process reload, lines still standing
             System.IO.File.Delete(KitMarkerPath);
             var inv = LocalPlayer.Inventory;
             if (inv == null) return;
-            if (inv.AmountOf(ItemId) == 0 && inv.AddItem(ItemId))
-                RLog.Msg(System.ConsoleColor.Green, "[BuildingLaser] string line didn't survive the reload — kit returned");
+            if (inv.AmountOf(ItemId) != 0) return;             // save already holds kits — don't dupe
+            int given = 0;
+            for (int i = 0; i < n; i++) if (inv.AddItem(ItemId)) given++;
+            if (given > 0)
+                RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line(s) didn't survive the reload — {given} kit(s) returned");
         }
         catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] orphaned-kit check failed: {ex.Message}"); }
     }

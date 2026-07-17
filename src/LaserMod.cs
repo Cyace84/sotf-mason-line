@@ -68,8 +68,7 @@ public class LaserMod : SonsMod
             {
                 _collectHold = 0f;
                 LaserLine.EndShake();
-                LaserLine.PlayCollectSound();
-                LaserLine.Clear();
+                LaserLine.CollectAimed();   // pulls out only the AIMED line; J still clears everything
             }
             else if (_collectHold > 0.12f) LaserLine.Shake(_collectHold);    // brief grace = tap stays a nudge
         }
