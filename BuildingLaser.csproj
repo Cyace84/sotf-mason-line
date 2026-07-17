@@ -13,6 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- tools/ = F7-console paste helpers, not part of the mod DLL -->
+    <Compile Remove="tools\**" />
     <_LibDll Include="lib\*.dll" />
     <Reference Include="@(_LibDll->'%(Filename)')">
       <HintPath>%(_LibDll.FullPath)</HintPath>

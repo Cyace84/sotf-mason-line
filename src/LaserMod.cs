@@ -24,11 +24,15 @@ public class LaserMod : SonsMod
 
     protected override void OnInitializeMod()
     {
+        RenderablePatch.Install(HarmonyInstance);   // heisen-crash guard v2: mute OnEnable Invoke for our item
         SdkEvents.OnAfterSpawn.Subscribe(LineTool.Setup);
         RLog.Msg(System.ConsoleColor.Cyan,
             "[BuildingLaser] initialized — craft the Builder's String Line (stick + rope), " +
             "hold it: L = drop point A/B, K = toggle snap, J = clear");
     }
+
+    private const float CollectHoldSeconds = 0.4f;   // vanilla dismantle Hold(duration=0.4) — recon 2026-07-17
+    private static float _collectHold;
 
     private void Tick()
     {
@@ -52,8 +56,25 @@ public class LaserMod : SonsMod
         // drive the inventory hover outline (axe-style highlight) from IsHighlighted
         LineTool.UpdateInventoryHover();
 
-        // C on a stake = collect the line back (vanilla-dismantle feel); J stays as global clear
-        if (gameplay && Input.GetKeyDown(KeyCode.C) && LaserLine.AimingAtStake()) LaserLine.Clear();
+        // C on a stake = HOLD-to-collect, vanilla loose-object dismantle feel (user 2026-07-16: only
+        // structures get the icon+gauge UI; a bed just SHAKES while you hold C — copy the bed). The
+        // stakes jitter while the hold accumulates; release early = nothing happens. J = instant clear.
+        bool aimingStake = gameplay && LaserLine.AimingAtStake();
+        if (aimingStake && Input.GetKeyDown(KeyCode.C)) LaserLine.Nudge();   // per-press kick, vanilla feel
+        if (aimingStake && Input.GetKey(KeyCode.C))
+        {
+            _collectHold += Time.deltaTime;
+            if (_collectHold >= CollectHoldSeconds)
+            {
+                _collectHold = 0f;
+                LaserLine.EndShake();
+                LaserLine.PlayCollectSound();
+                LaserLine.Clear();
+            }
+            else if (_collectHold > 0.12f) LaserLine.Shake(_collectHold);    // brief grace = tap stays a nudge
+        }
+        else if (_collectHold > 0f) { _collectHold = 0f; LaserLine.EndShake(); }
+        LaserLine.UpdateNudge();
 
         LaserLine.UpdateGhost(held && gameplay);
     }

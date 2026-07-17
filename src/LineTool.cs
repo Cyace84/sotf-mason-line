@@ -92,6 +92,7 @@ internal static class LineTool
             EnsureRecipe();
 
             Ready = true;
+            RefundOrphanedKit();
             RLog.Msg(System.ConsoleColor.Cyan,
                 "[BuildingLaser] Builder's Line ready — craft: 1 stick + 1 rope, equip it to place the line");
         }
@@ -100,6 +101,76 @@ internal static class LineTool
             Ready = false;
             RLog.Error($"[BuildingLaser] item setup failed (hotkeys stay ungated): {ex}");
         }
+    }
+
+    // ---- kit economy (user-approved design 2026-07-16): one craft = one kit = one active line,
+    // unlimited length, NO ingredient burn. Physicality: while the line stands in the world the kit
+    // is OUT of the inventory (RemoveItem instantDestroy:true — the same flag the game itself uses
+    // for placement-consume, memento-mori flag telemetry); collecting (C) / clearing (J) returns it.
+    // A marker file survives a game restart so a saved-with-line-out inventory gets the kit back
+    // (the line itself is not in the save). Signatures observed: PlayerInventory.AddItem/RemoveItem/
+    // AmountOf decompile 2026-07-16.
+    private static bool _kitConsumed;
+    private static string KitMarkerPath =>
+        System.IO.Path.Combine(Application.persistentDataPath, "BuildingLaser.line-out");
+
+    /// <summary>Line completed (stake B planted): take the kit out of the inventory. No-op when the
+    /// pipeline is down (dev fallback) or a previous line is being replaced (net: one line = one kit).</summary>
+    public static void ConsumeKit()
+    {
+        if (!Ready || _kitConsumed) return;
+        try
+        {
+            var inv = LocalPlayer.Inventory;
+            if (inv == null) return;
+            if (inv.RemoveItem(ItemId, 1, false, true, true, null, true))
+            {
+                _kitConsumed = true;
+                try { System.IO.File.WriteAllText(KitMarkerPath, "1"); } catch { }
+                RLog.Msg(System.ConsoleColor.Yellow, "[BuildingLaser] kit staked out — collect the line (C) to get it back");
+            }
+            else RLog.Warning("[BuildingLaser] kit consume failed (RemoveItem=false) — line placed anyway");
+        }
+        catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit consume failed: {ex.Message}"); }
+    }
+
+    /// <summary>Line collected/cleared: put the kit back. Gated by the consume flag, so a J with only
+    /// point A planted (nothing consumed yet) refunds nothing.</summary>
+    public static void RefundKit()
+    {
+        if (!_kitConsumed) return;
+        try
+        {
+            var inv = LocalPlayer.Inventory;
+            if (inv != null && inv.AddItem(ItemId))
+            {
+                _kitConsumed = false;
+                try { System.IO.File.Delete(KitMarkerPath); } catch { }
+                FixRenderableLoadedFlags();   // re-add touches the layout item; make sure its renderable is safe
+                RLog.Msg(System.ConsoleColor.Green, "[BuildingLaser] kit returned to the inventory");
+            }
+            else RLog.Warning("[BuildingLaser] kit refund failed (AddItem=false) — marker kept, will retry on next world load");
+        }
+        catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit refund failed: {ex.Message}"); }
+    }
+
+    /// <summary>World load: if a previous run left the kit staked out (marker) but the line did not
+    /// survive (fresh process — stakes are DDoL, so they DO survive an in-process reload), give the
+    /// kit back — but only when the loaded save has ZERO kits. A save made BEFORE placing already
+    /// contains the kit; refunding on top of it would dupe.</summary>
+    private static void RefundOrphanedKit()
+    {
+        try
+        {
+            if (!System.IO.File.Exists(KitMarkerPath)) return;
+            if (LaserLine.HasLine) { _kitConsumed = true; return; }   // in-process reload, line still standing
+            System.IO.File.Delete(KitMarkerPath);
+            var inv = LocalPlayer.Inventory;
+            if (inv == null) return;
+            if (inv.AmountOf(ItemId) == 0 && inv.AddItem(ItemId))
+                RLog.Msg(System.ConsoleColor.Green, "[BuildingLaser] string line didn't survive the reload — kit returned");
+        }
+        catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] orphaned-kit check failed: {ex.Message}"); }
     }
 
     /// <summary>App-lifetime work: ItemData + held template survive world reloads (DontDestroyOnLoad).</summary>
@@ -371,6 +442,9 @@ internal static class LineTool
             if (id == _craftPosedId) return;
             t.localEulerAngles = CraftDisplayEuler;
             _craftPosedId = id;
+            // a new clone appeared => a new CustomItemRenderable may exist un-fixed; flag+sanitize it
+            // BEFORE its next SetItemInstance (poison) or OnEnable (detonation). 2026-07-16 crash window.
+            FixRenderableLoadedFlags();
             RLog.Msg(System.ConsoleColor.Cyan, $"[BuildingLaser] craft-mat pose applied (SV {id})");
             return;
         }
@@ -459,7 +533,17 @@ internal static class LineTool
     /// UnityEventBase.AddCall on managed-injected renderables. Result: AddItem of the crafted item
     /// fails, the fallback DropItem NREs in TransferOnRenderableLoadedCallbackFrom, the item VANISHES.
     /// Setting the field flips SetItemInstance onto the direct "already loaded" path.
-    /// Live-verified 2026-07-15 (craft → stash → in backpack, user-confirmed).</summary>
+    /// Live-verified 2026-07-15 (craft → stash → in backpack, user-confirmed).
+    ///
+    /// HEISEN-CRASH CURE (root-caused 2026-07-16, ErrorLog.log: AccessViolation at UnityEvent`1.Invoke
+    /// ← CustomItemRenderable.OnEnable): a RankException-interrupted AddCall leaves _onRenderableLoaded's
+    /// native call-list corrupt; OnEnable fires on EVERY inventory open and Invoke then reads garbage →
+    /// native AV (the long-standing 5/7 inventory crash). Cure: REPLACE the event object with a fresh
+    /// empty UnityEvent&lt;Transform&gt; via the interop field setter — never touch the poisoned one (even a
+    /// Clear could walk the corrupt array). Nothing legitimately subscribes: with IsObjectLoaded=true the
+    /// game never takes the listener branch, and the SDK itself never subscribes.</summary>
+    private static readonly System.Collections.Generic.HashSet<int> _sanitizedRenderables = new();
+
     private static void FixRenderableLoadedFlags()
     {
         // SURGICAL (lesson: a broad Setup-time sweep marked 3 nodes "loaded" incl. template objects and
@@ -467,11 +551,11 @@ internal static class LineTool
         // native ItemRenderables (GPS-clone mat/pickup nodes) never needed the fix (mat display worked
         // un-fixed on 2026-07-15). So: exact component type + the INSTANTIATED model clone only.
         var arr = Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<Endnight.Rendering.AssetReferenceRenderable>());
-        int patched = 0;
+        int patched = 0, sanitized = 0;
         foreach (var o in arr)
         {
             var ar = o.TryCast<Endnight.Rendering.AssetReferenceRenderable>();
-            if (ar == null || ar.IsObjectLoaded) continue;
+            if (ar == null) continue;
             if (ar.GetIl2CppType().Name != "CustomItemRenderable") continue;
             bool ours = false;
             var p = ar.transform;
@@ -481,13 +565,30 @@ internal static class LineTool
             foreach (var t in ar.GetComponentsInChildren<Transform>(true))
                 if (t.name == "BuildersLineInvModel(Clone)") { model = t.gameObject; break; }
             if (model == null) continue;
-            ar._cachedLoadedObject = model;
-            patched++;
-            RLog.Msg(System.ConsoleColor.Cyan,
-                $"[BuildingLaser] renderable loaded-flag fixed: {ar.name} -> {model.name}");
+            if (!ar.IsObjectLoaded)
+            {
+                ar._cachedLoadedObject = model;
+                patched++;
+                RLog.Msg(System.ConsoleColor.Cyan,
+                    $"[BuildingLaser] renderable loaded-flag fixed: {ar.name} -> {model.name}");
+            }
+            if (SanitizeRenderable(ar)) sanitized++;
         }
-        if (patched == 0)
+        if (sanitized > 0)
+            RLog.Msg(System.ConsoleColor.Cyan, $"[BuildingLaser] renderable events sanitized: {sanitized}");
+        if (patched == 0 && sanitized == 0)
             RLog.Msg("[BuildingLaser] renderable loaded-flag: nothing to fix (ok if already patched)");
+    }
+
+    /// <summary>Replace a renderable's _onRenderableLoaded with a fresh event, once per instance.
+    /// Called from the sweep above AND synchronously from <see cref="RenderablePatch"/> before every
+    /// CustomItemRenderable.OnEnable — the sweep alone loses the race against clones the game creates
+    /// lazily on the first inventory open (crash 2026-07-17 00:48 despite 'sanitized: 1').</summary>
+    internal static bool SanitizeRenderable(Endnight.Rendering.AssetReferenceRenderable ar)
+    {
+        if (!_sanitizedRenderables.Add(ar.GetInstanceID())) return false;
+        ar.__onRenderableLoaded_k__BackingField = new UnityEngine.Events.UnityEvent<Transform>();
+        return true;
     }
 
     /// <summary>Add the crafting recipe unless a previous world already registered it

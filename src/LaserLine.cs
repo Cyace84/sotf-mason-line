@@ -28,7 +28,13 @@ internal static class LaserLine
     private static float _segLen = 20f;
 
     /// <summary>Aim distance (m) to a stake base that counts as "looking at it" for C-collect.</summary>
-    private const float CollectAimRadius = 0.45f;
+    // 0.45 was too tight to hit without a visual cue (user 2026-07-16); with the ShowMessage prompt
+    // the stake is still the clear target, so a generous radius just removes the pixel-hunt.
+    private const float CollectAimRadius = 1.0f;
+
+    // Ghost tint: translucent white like the vanilla build ghosts (the old (0.55,0.8,1) blue read as
+    // an artifact — user 2026-07-16). Live-tunable via tune.sh ghost R G B A.
+    private static readonly Color GhostTint = new Color(1f, 1f, 1f, 0.3f);
 
     private const float StakeHeight = 1.1f;
     private const float StakeRadius = 0.05f;
@@ -102,6 +108,7 @@ internal static class LaserLine
             _haveA = true;
             EnsureStake(ref _stakeA, "BuildingLaserStakeA");
             PlaceStake(_stakeA!, p);
+            PlayPlaceSound(p);
             RLog.Msg(System.ConsoleColor.Green, "[BuildingLaser] stake A planted — aim the far end and press L again");
             return;
         }
@@ -124,25 +131,232 @@ internal static class LaserLine
 
         EnsureStake(ref _stakeB, "BuildingLaserStakeB");
         PlaceStake(_stakeB!, p);
+        PlayPlaceSound(p);
         BuildRope(_pointA, p);
+        LineTool.ConsumeKit();   // kit economy: the placed line IS the kit — it leaves the inventory
         RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line set, {_segLen:0.0}m — snap ON (K toggles, C on a stake collects)");
     }
 
-    /// <summary>Is the crosshair pointing at one of the planted stakes? (Stakes carry no
-    /// colliders, so this is an aim-point proximity test against the stake bases.)</summary>
+    /// <summary>Is the crosshair pointing at one of the planted stakes? Vanilla-style: the game
+    /// sphere-casts r=0.2 over 2.25m from the camera against the stick's capsule (layer-21 recon
+    /// 2026-07-17). Our stakes carry no colliders, so the equivalent cheap test is the distance
+    /// between the camera's view segment and the stake's axis segment (base → base+StakeHeight):
+    /// aim anywhere along the stick, even looking up at it point-blank.</summary>
+    private const float CollectReach = 2.5f;          // camera-to-stick reach (vanilla 2.475)
+    private const float CollectCastRadius = 0.2f;     // vanilla sphere-cast radius
+
     public static bool AimingAtStake()
     {
         if (!HasLine && !_haveA) return false;
-        if (!TryAimPoint(out var p)) return false;
-        if (_haveA && (p - _pointA).sqrMagnitude < CollectAimRadius * CollectAimRadius) return true;
+        var cam = Camera.main;
+        if (cam == null) return false;
+        var o = cam.transform.position;
+        var e = o + cam.transform.forward * CollectReach;
+        float hit = CollectCastRadius + StakeRadius;
+        float hit2 = hit * hit;
+
+        if (_haveA && SegSegDistSqr(o, e, _pointA, _pointA + Vector3.up * StakeHeight) < hit2) return true;
         if (HasLine &&
-            ((p - Origin).sqrMagnitude < CollectAimRadius * CollectAimRadius ||
-             (p - _groundB).sqrMagnitude < CollectAimRadius * CollectAimRadius)) return true;
+            (SegSegDistSqr(o, e, Origin, Origin + Vector3.up * StakeHeight) < hit2 ||
+             SegSegDistSqr(o, e, _groundB, _groundB + Vector3.up * StakeHeight) < hit2)) return true;
         return false;
+    }
+
+    /// <summary>Squared distance between segments p1q1 and p2q2 (Ericson, RTCD 5.1.9).</summary>
+    private static float SegSegDistSqr(Vector3 p1, Vector3 q1, Vector3 p2, Vector3 q2)
+    {
+        Vector3 d1 = q1 - p1, d2 = q2 - p2, r = p1 - p2;
+        float a = Vector3.Dot(d1, d1), e2 = Vector3.Dot(d2, d2), f = Vector3.Dot(d2, r);
+        float s, t;
+        if (a <= 1e-6f && e2 <= 1e-6f) return r.sqrMagnitude;
+        if (a <= 1e-6f) { s = 0f; t = Mathf.Clamp01(f / e2); }
+        else
+        {
+            float c = Vector3.Dot(d1, r);
+            if (e2 <= 1e-6f) { t = 0f; s = Mathf.Clamp01(-c / a); }
+            else
+            {
+                float b = Vector3.Dot(d1, d2), denom = a * e2 - b * b;
+                s = denom > 1e-6f ? Mathf.Clamp01((b * f - c * e2) / denom) : 0f;
+                t = (b * s + f) / e2;
+                if (t < 0f) { t = 0f; s = Mathf.Clamp01(-c / a); }
+                else if (t > 1f) { t = 1f; s = Mathf.Clamp01((b - c) / a); }
+            }
+        }
+        var c1 = p1 + d1 * s;
+        var c2 = p2 + d2 * t;
+        return (c1 - c2).sqrMagnitude;
+    }
+
+    // ---- hold-to-collect shake (vanilla dismantle wobble, ScrewStructureDestruction.Routine style:
+    // damped organic forces, not a mechanical sine — Perlin noise at ~8Hz + amplitude that grows with
+    // hold progress). Rotation-only jitter around the stakes' settled rotation: the stake BASES don't
+    // move, so AimingAtStake stays stable during the hold. A short C TAP = decaying nudge (vanilla
+    // gives a kick per press even if you let go).
+    private static Quaternion _shakeBaseA, _shakeBaseB;
+    private static Vector3 _shakePosA, _shakePosB;
+    private static bool _shaking;
+    private static float _nudgeT = -1f;   // >=0 = tap-nudge decay in progress
+
+    // ---- vanilla wobble rig: the game's dismantle shake is the authored legacy clip
+    // 'PreviewAnim -  Wobble' whose curves target a child named "Renderable" (live-probed on
+    // PreviewAnimationManager._animationShell 2026-07-17: max ~1.6deg / ~5mm — SUBTLE). We sample
+    // the clip onto a hidden proxy (root + "Renderable" child) and copy the child's local pose
+    // onto the stakes. WobbleExtraLite drives the tap-nudge.
+    private const float WobbleSeconds = 0.4f;         // vanilla dismantle hold duration
+    private static GameObject? _wobbleRoot;
+    private static Transform? _wobblePayload;
+    private static AnimationClip? _wobbleClip;        // hold
+    private static AnimationClip? _nudgeClip;         // tap
+    private static bool _wobbleInitTried;
+
+    private static void EnsureWobbleRig()
+    {
+        if (_wobbleRoot != null || _wobbleInitTried) return;
+        _wobbleInitTried = true;
+        try
+        {
+            var all = Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<AnimationClip>());
+            foreach (var o in all)
+            {
+                var c = o.TryCast<AnimationClip>();
+                if (c == null) continue;
+                if (c.name == "PreviewAnim -  Wobble") _wobbleClip = c;
+                else if (c.name == "PreviewAnim -  WobbleExtraLite") _nudgeClip = c;
+            }
+            if (_wobbleClip == null) { RLog.Warning("[BuildingLaser] vanilla Wobble clip not loaded — using soft fallback shake"); return; }
+            if (_nudgeClip == null) _nudgeClip = _wobbleClip;
+
+            _wobbleRoot = new GameObject("BuildingLaserWobbleProxy");
+            Object.DontDestroyOnLoad(_wobbleRoot);
+            _wobbleRoot.transform.position = new Vector3(0f, -2000f, 0f);
+            var payload = new GameObject("Renderable");   // clip curves bind to this child name
+            payload.transform.SetParent(_wobbleRoot.transform, false);
+            _wobblePayload = payload.transform;
+            RLog.Msg(System.ConsoleColor.Cyan, "[BuildingLaser] vanilla wobble rig ready");
+        }
+        catch (System.Exception e) { RLog.Warning($"[BuildingLaser] wobble rig init failed: {e.Message}"); }
+    }
+
+    /// <summary>Sample a wobble clip at 0..1 progress; false when the rig is unavailable.</summary>
+    private static bool SampleWobble(AnimationClip? clip, float progress, out Vector3 pos, out Quaternion rot)
+    {
+        pos = Vector3.zero; rot = Quaternion.identity;
+        EnsureWobbleRig();
+        if (clip == null || _wobbleRoot == null || _wobblePayload == null) return false;
+        clip.SampleAnimation(_wobbleRoot, Mathf.Clamp01(progress) * clip.length);
+        pos = _wobblePayload.localPosition;
+        rot = _wobblePayload.localRotation;
+        return true;
+    }
+
+    private static void CaptureShakeBases()
+    {
+        if (_stakeA != null) { _shakeBaseA = _stakeA.transform.rotation; _shakePosA = _stakeA.transform.position; }
+        if (_stakeB != null) { _shakeBaseB = _stakeB.transform.rotation; _shakePosB = _stakeB.transform.position; }
+    }
+
+    private static void ApplyJitter(Quaternion jitter, Vector3 offset)
+    {
+        if (_stakeA != null && _stakeA.activeSelf)
+        { _stakeA.transform.rotation = _shakeBaseA * jitter; _stakeA.transform.position = _shakePosA + offset; }
+        if (_stakeB != null && _stakeB.activeSelf)
+        { _stakeB.transform.rotation = _shakeBaseB * jitter; _stakeB.transform.position = _shakePosB + offset; }
+    }
+
+    private static void RestoreShakeBases()
+    {
+        if (_stakeA != null) { _stakeA.transform.rotation = _shakeBaseA; _stakeA.transform.position = _shakePosA; }
+        if (_stakeB != null) { _stakeB.transform.rotation = _shakeBaseB; _stakeB.transform.position = _shakePosB; }
+    }
+
+    public static void Shake(float t)
+    {
+        if (_stakeA == null && _stakeB == null) return;
+        if (!_shaking)
+        {
+            _shaking = true;
+            if (_nudgeT < 0f) CaptureShakeBases();   // a nudge already captured settled bases
+            _nudgeT = -1f;
+            PlayWobbleSound();                       // creak starts WITH the shake, not at the end
+        }
+        if (SampleWobble(_wobbleClip, t / WobbleSeconds, out var pos, out var rot))
+            ApplyJitter(rot, pos);
+        else
+        {   // rig unavailable — soft procedural fallback (far gentler than the old shake)
+            float amp = 0.8f + 1.2f * Mathf.Clamp01(t / WobbleSeconds);
+            ApplyJitter(Quaternion.Euler((Mathf.PerlinNoise(t * 5f, 0.31f) - 0.5f) * 2f * amp, 0f,
+                                         (Mathf.PerlinNoise(0.73f, t * 5.5f) - 0.5f) * 2f * amp), Vector3.zero);
+        }
+    }
+
+    public static void EndShake()
+    {
+        if (!_shaking) return;
+        _shaking = false;
+        RestoreShakeBases();
+    }
+
+    /// <summary>Short C tap on a stake: one decaying kick, vanilla per-press dismantle feedback.</summary>
+    public static void Nudge()
+    {
+        if (_shaking) return;
+        if (_stakeA == null && _stakeB == null) return;
+        if (_nudgeT < 0f) CaptureShakeBases();        // only capture from a settled pose
+        _nudgeT = 0f;
+    }
+
+    /// <summary>Per-frame decay of the tap-nudge (no-op unless one is running).</summary>
+    public static void UpdateNudge()
+    {
+        if (_nudgeT < 0f || _shaking) return;
+        _nudgeT += Time.deltaTime;
+        if (_nudgeT >= 0.4f) { _nudgeT = -1f; RestoreShakeBases(); return; }
+        if (SampleWobble(_nudgeClip, _nudgeT / 0.4f, out var pos, out var rot))
+            ApplyJitter(rot, pos);
+        else
+        {
+            float amp = 1.5f * Mathf.Exp(-7f * _nudgeT);
+            ApplyJitter(Quaternion.Euler(Mathf.Sin(_nudgeT * 55f) * amp, 0f, Mathf.Cos(_nudgeT * 47f) * amp * 0.7f), Vector3.zero);
+        }
+    }
+
+    /// <summary>Vanilla stick-plant sound (user-identified via FMOD bank browse 2026-07-17:
+    /// the first sound of a vanilla standing-stick placement).</summary>
+    public static void PlayPlaceSound(Vector3 pos)
+    {
+        try { FMODCommon.PlayOneshot("event:/SotF Events/player sounds/Build Sounds/Sticks/Stick Stab Ground", pos); }
+        catch { }
+    }
+
+    /// <summary>Wood creak at hold start — plays the moment the dismantle shake begins
+    /// (user A/B test 2026-07-17: correct creak, must fire on hold, not on completion).</summary>
+    public static void PlayWobbleSound()
+    {
+        try
+        {
+            var pos = HasLine ? Origin : _pointA;
+            FMODCommon.PlayOneshot("event:/SotF Events/player sounds/Build Sounds/build_log_wobble", pos);
+        }
+        catch { }
+    }
+
+    /// <summary>Pull-out completion: the inventory stick-pickup thud (user 2026-07-17: the foley
+    /// 'new_pickups/pickup_sticks' is the loud ground-sticks grab — wrong; the dull ending is the
+    /// Inv pickup).</summary>
+    public static void PlayCollectSound()
+    {
+        try
+        {
+            var pos = HasLine ? Origin : _pointA;
+            FMODCommon.PlayOneshot("event:/SotF Events/player sounds/Inv/Pickups/pickup_Stick", pos);
+        }
+        catch { }
     }
 
     public static void Clear()
     {
+        LineTool.RefundKit();    // no-op unless a completed line consumed the kit
         HasLine = false;
         _haveA = false;
         if (_ropeGo != null) _ropeGo.SetActive(false);
@@ -192,8 +406,43 @@ internal static class LaserLine
         if (!aiming) { if (_ghost != null) _ghost.SetActive(false); return; }
         if (!TryAimPoint(out var p)) { if (_ghost != null) _ghost.SetActive(false); return; }
         EnsureGhost();
+        TryAdoptVanillaGhostMat();
         _ghost!.SetActive(true);
         _ghost.transform.position = p + Vector3.up * (StakeHeight * 0.5f);
+    }
+
+    // The game's blueprint look (see-through + white outline) is NOT a plain material tint: vanilla
+    // ghosts get StructureGhostSwapper._ghostMaterial (a global static, populated when the game
+    // initialises any structure ghost) and are drawn by the StructuresGhostPass HDRP custom pass.
+    // Adopt that material lazily — the static may still be null when our ghost first spawns.
+    private static bool _ghostVanillaMat;
+
+    private static void TryAdoptVanillaGhostMat()
+    {
+        if (_ghostVanillaMat || _ghost == null) return;
+        try
+        {
+            var rend = _ghost.GetComponent<Renderer>();
+            if (rend == null) return;
+
+            var m = Sons.Crafting.Structures.StructureGhostSwapper._ghostMaterial;
+            if (m == null)
+            {
+                // fresh world: the static AND the material asset are unloaded until the game spawns a
+                // vanilla structure ghost (eval probe 2026-07-16: matAsset=NULL) — the 'white ghost'
+                // regression. But the SHADER is always findable, and the StructuresGhostPass picks
+                // renderers by shader, so a shader-built material should get the same blueprint look
+                // (applied cleanly via eval in a fresh world 2026-07-17; exact look pending eye-check —
+                // shader defaults may differ from the asset's tuned properties).
+                var sh = Shader.Find("Sons/Outline/StructuresGhostHLSL");
+                if (sh == null) return;
+                m = new Material(sh);
+            }
+            rend.sharedMaterial = m;
+            _ghostVanillaMat = true;
+            RLog.Msg($"[BuildingLaser] ghost adopted the vanilla ghost material: {m.name} ({m.shader?.name})");
+        }
+        catch { }
     }
 
     /// <summary>Snap cue: tint the rope material instance (warm = armed, grey = off). HDRP may ignore
@@ -220,6 +469,16 @@ internal static class LaserLine
             float t = i / (float)RopeSegments;
             var pt = Vector3.Lerp(tieA, tieB, t);
             pt.y -= sag * Mathf.Sin(t * Mathf.PI);
+            // Keep the rope OUT of the ground: on a crest the straight chord (+sag) dips under the
+            // terrain downslope (user 2026-07-16). Lift any interior sample to just above whatever
+            // the down-ray hits — the string then lies over the bump like a real taut cord.
+            // KNOWN RISK: the ray starts 30m up, so a dense canopy above the line could false-lift
+            // a sample onto a tree — revisit with a terrain-only mask if that shows up in play.
+            if (i > 0 && i < RopeSegments &&
+                Physics.Raycast(pt + Vector3.up * 30f, Vector3.down, out var ghit, 60f, AimMask,
+                    QueryTriggerInteraction.Ignore) &&
+                ghit.point.y + RopeRadius * 2f > pt.y)
+                pt.y = ghit.point.y + RopeRadius * 2f;
             path[i] = pt;
         }
 
@@ -365,7 +624,7 @@ internal static class LaserLine
             _ghost.GetComponent<MeshFilter>().mesh = mesh;
             _ghost.transform.localScale = new Vector3(StakeThick, StakeThick, StakeLong);
             _ghost.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            TintRenderer(_ghost, new Color(0.55f, 0.8f, 1f, 0.35f));
+            TintRenderer(_ghost, GhostTint);
             return;
         }
         _ghost = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -374,7 +633,7 @@ internal static class LaserLine
         var gcol = _ghost.GetComponent<Collider>();
         if (gcol != null) Object.Destroy(gcol);
         _ghost.transform.localScale = new Vector3(StakeRadius * 2f, StakeHeight * 0.5f, StakeRadius * 2f);
-        TintRenderer(_ghost, new Color(0.55f, 0.8f, 1f, 0.35f));
+        TintRenderer(_ghost, GhostTint);
     }
 
     // ---- game-asset fetchers (cached) ----

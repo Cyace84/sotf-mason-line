@@ -29,22 +29,28 @@ internal static class PlacePatch
     {
         if (_busy || !LaserLine.SnapActive || !LaserLine.HasLine || __instance == null) return;
 
-        // v1 gate: only warp ground (terrain) placements — that's the free-log-on-ground case.
-        // Structure-snapped placements keep their vanilla position. If non-log terrain placements
-        // get warped too, narrow this to active module == PlaceBeamOnGroundModule.
-        if (!__instance.IsTerrain) return;
-
-        // Only capture placements that are actually AT the string (≤2m sideways, between the
-        // stakes). Anything else on the map must build vanilla — an armed line is not a magnet.
-        if (!LaserLine.TryProject(__instance.PlacePosition, out var snapped)) return;
-
-        _busy = true;
         try
         {
+            // v1 gate: only warp ground (terrain) placements — that's the free-log-on-ground case.
+            // Structure-snapped placements keep their vanilla position. If non-log terrain placements
+            // get warped too, narrow this to active module == PlaceBeamOnGroundModule.
+            // NOTE: the game's background snap-point predictor (PredictedSnapPointsUpdater →
+            // PlaceLeaningBeamStructureModule fake pilars) also calls CalcRelativePlacePosition on
+            // half-built TargetInfos where get_IsTerrain THROWS an Il2CppException (Latest.log
+            // 2026-07-16 04:4x, 12 stack-trace spams). Those calls are not the player's active
+            // placement — swallow and leave them vanilla.
+            if (!__instance.IsTerrain) return;
+
+            // Only capture placements that are actually AT the string (≤2m sideways, between the
+            // stakes). Anything else on the map must build vanilla — an armed line is not a magnet.
+            if (!LaserLine.TryProject(__instance.PlacePosition, out var snapped)) return;
+
+            _busy = true;
             __instance.SetPlacePosition(snapped);
             // Orient the log along the line. If it comes out perpendicular, swap to Cross(up, Dir).
             __instance.SetPlaceAxis(LaserLine.Dir);
         }
+        catch { }
         finally
         {
             _busy = false;
