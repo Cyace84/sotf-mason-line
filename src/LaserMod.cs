@@ -26,6 +26,9 @@ public class LaserMod : SonsMod
     {
         RenderablePatch.Install(HarmonyInstance);   // heisen-crash guard v2: mute OnEnable Invoke for our item
         SdkEvents.OnAfterSpawn.Subscribe(LineTool.Setup);
+        SdkEvents.OnWorldExited.Subscribe(LineTool.OnWorldExited);      // DDoL lines must die with the world (dupe fix)
+        // save-time kit marker: SavePathPatch (Harmony on SaveGameManager.Save/Load) — the SDK event
+        // hides the save dir, and that's the only reliable slot-id source for in-game saves
         RLog.Msg(System.ConsoleColor.Cyan,
             "[BuildingLaser] initialized — craft the Builder's String Line (stick + rope), " +
             "hold it: L = drop point A/B, K = toggle snap, J = clear");

@@ -27,6 +27,7 @@ internal static class LineTool
     /// <summary>True once the item pipeline initialized for this world. While false the mod
     /// falls back to ungated hotkeys, so a broken item setup never bricks the core feature.</summary>
     public static bool Ready;
+    private static bool _setupFailed;   // TRUE only after a THROWN Setup — gates the dev fallback
 
     // Inventory hover: the game DOES detect hover on our item (it sets InventoryLayoutItem.IsHighlighted
     // and plays the wobble), but its InitMeshOutliner never collects our MeshOutliners into the layout
@@ -56,7 +57,10 @@ internal static class LineTool
     {
         get
         {
-            if (!Ready) return true;   // dev fallback: item pipeline down -> keep hotkeys usable
+            // dev fallback ONLY when setup actually FAILED. Before setup completes (world still
+            // loading) this must be FALSE — the old blanket "!Ready => held" made the ghost stake
+            // flash in front of the player for the first seconds of every load (user 2026-07-18).
+            if (!Ready) return _setupFailed;
             try
             {
                 var props = LocalPlayer.Inventory?.InventoryProps;
@@ -74,6 +78,7 @@ internal static class LineTool
     {
         try
         {
+            LaserLine.ResetWorld();   // belt-and-braces: OnWorldExited may not fire on every load path
             RegisterItemOnce();
 
             var data = ItemDatabaseManager.ItemById(ItemId);
@@ -92,13 +97,14 @@ internal static class LineTool
             EnsureRecipe();
 
             Ready = true;
-            RefundOrphanedKit();
+            RestoreKitsFromMarker();
             RLog.Msg(System.ConsoleColor.Cyan,
                 "[BuildingLaser] Builder's Line ready — craft: 1 stick + 1 rope, equip it to place the line");
         }
         catch (System.Exception ex)
         {
             Ready = false;
+            _setupFailed = true;
             RLog.Error($"[BuildingLaser] item setup failed (hotkeys stay ungated): {ex}");
         }
     }
@@ -114,12 +120,52 @@ internal static class LineTool
     private static string KitMarkerPath =>
         System.IO.Path.Combine(Application.persistentDataPath, "BuildingLaser.line-out");
 
-    private static void WriteKitMarker()
+    /// <summary>SdkEvents.OnWorldExited (quit to menu): lines are NOT in the save and must not leak
+    /// into the next world — DDoL carried them across reloads => user-repro'd kit dupe 2026-07-17.</summary>
+    public static void OnWorldExited()
+    {
+        LaserLine.ResetWorld();
+        _kitsOut = 0;
+    }
+
+    // Save-slot id source: GameSetupManager.GetSelectedSaveId() is only valid in the LOAD MENU —
+    // during an in-game save it returns 0 (observed: marker "0 1", refund missed, kit lost — user
+    // repro 2026-07-18). The dir argument of SaveGameManager.Save/Load ends in the numeric save id
+    // (…/SinglePlayer/<id>), so BOTH sides parse the id from the same source: the path.
+    private static uint _loadedSaveId;   // id of the save the current world was loaded from (0 = new game)
+
+    internal static uint ParseSaveIdFromDir(string dir)
     {
         try
         {
-            if (_kitsOut <= 0) System.IO.File.Delete(KitMarkerPath);
-            else System.IO.File.WriteAllText(KitMarkerPath, _kitsOut.ToString());
+            var parts = dir.Replace('\\', '/').TrimEnd('/').Split('/');
+            for (int i = parts.Length - 1; i >= 0; i--)
+                if (uint.TryParse(parts[i], out var id) && id > 0) return id;
+        }
+        catch { }
+        return 0;
+    }
+
+    /// <summary>Harmony prefix on SaveGameManager.Load: remember which slot this world comes from.</summary>
+    internal static void OnLoadDir(string dir) => _loadedSaveId = ParseSaveIdFromDir(dir);
+
+    /// <summary>Harmony prefix on SaveGameManager.Save: stamp the marker with THIS save slot's id +
+    /// kits currently staked out. Written at save time, the marker matches the save's inventory
+    /// EXACTLY — so the load-time refund is unconditional, no AmountOf heuristics.</summary>
+    internal static void OnBeforeSave(string dir)
+    {
+        try
+        {
+            uint id = ParseSaveIdFromDir(dir);
+            if (_kitsOut > 0)
+            {
+                System.IO.File.WriteAllText(KitMarkerPath, $"{id} {_kitsOut}");
+                return;
+            }
+            // zero out: only clear OUR slot's marker — another slot's pending refund must survive
+            if (System.IO.File.Exists(KitMarkerPath) &&
+                System.IO.File.ReadAllText(KitMarkerPath).Trim().Split(' ')[0] == id.ToString())
+                System.IO.File.Delete(KitMarkerPath);
         }
         catch { }
     }
@@ -148,7 +194,6 @@ internal static class LineTool
             if (inv.RemoveItem(ItemId, 1, false, true, true, null, true))
             {
                 _kitsOut++;
-                WriteKitMarker();
                 RLog.Msg(System.ConsoleColor.Yellow, $"[BuildingLaser] kit staked out ({_kitsOut} in the field) — collect the line (C) to get it back");
             }
             else RLog.Warning("[BuildingLaser] kit consume failed (RemoveItem=false) — line placed anyway");
@@ -167,38 +212,52 @@ internal static class LineTool
             if (inv != null && inv.AddItem(ItemId))
             {
                 _kitsOut--;
-                WriteKitMarker();
                 FixRenderableLoadedFlags();   // re-add touches the layout item; make sure its renderable is safe
                 RLog.Msg(System.ConsoleColor.Green, "[BuildingLaser] kit returned to the inventory");
             }
-            else RLog.Warning("[BuildingLaser] kit refund failed (AddItem=false) — marker kept, will retry on next world load");
+            else RLog.Warning("[BuildingLaser] kit refund failed (AddItem=false) — count kept, the save-time marker will restore it");
         }
         catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit refund failed: {ex.Message}"); }
     }
 
-    /// <summary>World load: if a previous run left kits staked out (marker = count) but the lines did
-    /// not survive (fresh process — stakes are DDoL, so they DO survive an in-process reload), give
-    /// the kits back — but only when the loaded save has ZERO kits. A save made BEFORE placing
-    /// already contains the kit; refunding on top of it would dupe.</summary>
-    private static void RefundOrphanedKit()
+    /// <summary>World load: lines never survive a reload (ResetWorld), so kits stamped as staked-out
+    /// in THIS save's marker go back to the inventory. The slot id gates cross-slot refunds; markers
+    /// are KEPT after refunding (they belong to the save on disk — reloading the same save again
+    /// without saving must refund again; the next save rewrites/deletes them).</summary>
+    private static void RestoreKitsFromMarker()
     {
+        _kitsOut = 0;
         try
         {
             if (!System.IO.File.Exists(KitMarkerPath)) return;
-            int n = 1;
-            try { int.TryParse(System.IO.File.ReadAllText(KitMarkerPath).Trim(), out n); } catch { }
-            if (n < 1) n = 1;
-            if (LaserLine.HasLine) { _kitsOut = n; return; }   // in-process reload, lines still standing
-            System.IO.File.Delete(KitMarkerPath);
+            var parts = System.IO.File.ReadAllText(KitMarkerPath).Trim().Split(' ');
             var inv = LocalPlayer.Inventory;
             if (inv == null) return;
-            if (inv.AmountOf(ItemId) != 0) return;             // save already holds kits — don't dupe
+            if (parts.Length < 2)
+            {
+                // legacy consume-time marker (no slot id): old one-shot heuristic, then retire it
+                System.IO.File.Delete(KitMarkerPath);
+                if (int.TryParse(parts[0], out var legacy) && legacy > 0 && inv.AmountOf(ItemId) == 0)
+                    for (int i = 0; i < legacy; i++) inv.AddItem(ItemId);
+                return;
+            }
+            if (!uint.TryParse(parts[0], out var id) || !int.TryParse(parts[1], out var n) || n < 1) return;
+            if (id == 0)
+            {
+                // migration: marker from the broken GetSelectedSaveId build (always id 0) — one-shot
+                // refund under the old AmountOf==0 anti-dupe gate, then retire the marker
+                System.IO.File.Delete(KitMarkerPath);
+                if (inv.AmountOf(ItemId) == 0)
+                    for (int i = 0; i < n; i++) inv.AddItem(ItemId);
+                return;
+            }
+            if (id != _loadedSaveId) return;   // marker belongs to another slot (or this is a new game)
             int given = 0;
             for (int i = 0; i < n; i++) if (inv.AddItem(ItemId)) given++;
             if (given > 0)
-                RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line(s) didn't survive the reload — {given} kit(s) returned");
+                RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] {given} kit(s) were staked out when this save was made — returned");
         }
-        catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] orphaned-kit check failed: {ex.Message}"); }
+        catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit marker restore failed: {ex.Message}"); }
     }
 
     /// <summary>App-lifetime work: ItemData + held template survive world reloads (DontDestroyOnLoad).</summary>

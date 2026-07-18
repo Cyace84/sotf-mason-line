@@ -411,6 +411,38 @@ internal static class LaserLine
         RLog.Msg(System.ConsoleColor.Yellow, $"[BuildingLaser] line collected — {_lines.Count} still standing");
     }
 
+    /// <summary>World unload/load: the lines are NOT part of the save and the stakes are DDoL — left
+    /// alone they survive into a reloaded older save whose inventory still holds the kits
+    /// (user-repro'd dupe 2026-07-17). Destroy every visual, drop all cached scene assets (materials/
+    /// meshes/clips unload with the world; the getters re-find them lazily). NO kit refunds here —
+    /// the save-time marker handles inventory restitution on load.</summary>
+    public static void ResetWorld()
+    {
+        foreach (var ln in _lines) ln.Destroy();
+        _lines.Clear();
+        if (_pendingStake != null) { Object.Destroy(_pendingStake); _pendingStake = null; }
+        _haveA = false;
+        SnapActive = false;
+        _aimedLine = null;
+        _aimedPending = false;
+        _shaking = false;
+        _nudgeT = -1f;
+        _shakeStakeA = null;
+        _shakeStakeB = null;
+        if (_ghost != null) { Object.Destroy(_ghost); _ghost = null; }
+        if (_wobbleRoot != null) Object.Destroy(_wobbleRoot);
+        _wobbleRoot = null; _wobblePayload = null; _wobbleClip = null; _nudgeClip = null;
+        _wobbleInitTried = false;
+        // null the asset AND its tried-flag together — nulling only the asset left the getter
+        // returning the cached null in the next world => materialless renderers = PINK stick on the
+        // crafting mat (user repro 2026-07-18)
+        _woodMat = null; _woodTried = false;
+        _ropeMat = null; _ropeMatTried = false;
+        _stakeMat = null; _stakeMatTried = false;
+        _knotMesh = null; _knotMeshTried = false;
+        _stakeMesh = null; _stakeMeshTried = false;
+    }
+
     /// <summary>J: tear down EVERYTHING — all lines (one kit refunded each) + the pending stake.</summary>
     public static void Clear()
     {
