@@ -553,25 +553,81 @@ internal static class LaserLine
         var tieA = line.Origin + TieOffset;
         var tieB = line.GroundB + TieOffset;
         float span = Vector3.Distance(tieA, tieB);
-        float sag = span * SagFraction;
+        // adaptive density: a fixed 24 made long spans angular over rough ground — aim for ~1
+        // sample per 1.5m, floor at the old constant, capped so a 200m troll line stays cheap
+        int segs = Mathf.Clamp(Mathf.RoundToInt(span / 1.5f), RopeSegments, 96);
+        float horiz = new Vector2(tieB.x - tieA.x, tieB.z - tieA.z).magnitude;
 
-        var path = new Vector3[RopeSegments + 1];
-        for (int i = 0; i <= RopeSegments; i++)
+        // 1) ground profile under the chord (static-only rays; -inf = no ground constraint there)
+        var g = new float[segs + 1];
+        var sx = new float[segs + 1];   // horizontal distance along the chord
+        for (int i = 0; i <= segs; i++)
         {
-            float t = i / (float)RopeSegments;
-            var pt = Vector3.Lerp(tieA, tieB, t);
-            pt.y -= sag * Mathf.Sin(t * Mathf.PI);
-            // Keep the rope OUT of the ground: on a crest the straight chord (+sag) dips under the
-            // terrain downslope (user 2026-07-16). Lift any interior sample to just above whatever
-            // the down-ray hits — the string then lies over the bump like a real taut cord.
-            // KNOWN RISK: the ray starts 30m up, so a dense canopy above the line could false-lift
-            // a sample onto a tree — revisit with a terrain-only mask if that shows up in play.
-            if (i > 0 && i < RopeSegments &&
-                Physics.Raycast(pt + Vector3.up * 30f, Vector3.down, out var ghit, 60f, AimMask,
-                    QueryTriggerInteraction.Ignore) &&
-                ghit.point.y + RopeRadius * 2f > pt.y)
-                pt.y = ghit.point.y + RopeRadius * 2f;
+            float t = i / (float)segs;
+            sx[i] = t * horiz;
+            g[i] = TryGroundY(Vector3.Lerp(tieA, tieB, t), out var gy)
+                ? gy + RopeRadius * 2f : float.NegativeInfinity;
+        }
+        // median-3 on the profile: one bad sample (stray static collider) cannot fake a crest
+        for (int i = 1; i < segs; i++)
+        {
+            float a = g[i - 1], b = g[i], c = g[i + 1];
+            if (float.IsNegativeInfinity(a) || float.IsNegativeInfinity(b) || float.IsNegativeInfinity(c)) continue;
+            g[i] = Mathf.Max(Mathf.Min(a, b), Mathf.Min(Mathf.Max(a, b), c));
+        }
+
+        // 2) taut-string envelope = UPPER CONVEX HULL over (distance, height) of tie points +
+        // ground samples. A real stretched cord hangs in straight runs and breaks ONLY over crests
+        // that actually push into it — the old per-sample ground-hug read as "the rope lies down
+        // the whole slope" between uneven anchors (user 2026-07-18).
+        var e = new float[segs + 1];
+        for (int i = 0; i <= segs; i++) e[i] = i == 0 ? tieA.y : i == segs ? tieB.y : g[i];
+        var hull = new System.Collections.Generic.List<int> { 0 };
+        for (int i = 1; i <= segs; i++)
+        {
+            if (float.IsNegativeInfinity(e[i]) && i != segs) continue;   // unconstrained sample
+            while (hull.Count >= 2)
+            {
+                int o = hull[hull.Count - 2], a = hull[hull.Count - 1];
+                float cross = (sx[a] - sx[o]) * (e[i] - e[o]) - (e[a] - e[o]) * (sx[i] - sx[o]);
+                if (cross >= 0f) hull.RemoveAt(hull.Count - 1);   // previous point is not a crest
+                else break;
+            }
+            hull.Add(i);
+        }
+
+        // 3) resample: straight run between hull vertices + small per-run sag, never below ground
+        var path = new Vector3[segs + 1];
+        int seg = 0;
+        for (int i = 0; i <= segs; i++)
+        {
+            while (seg < hull.Count - 2 && sx[i] > sx[hull[seg + 1]]) seg++;
+            int ha = hull[seg], hb = hull[seg + 1];
+            float u = Mathf.InverseLerp(sx[ha], sx[hb], sx[i]);
+            float y = Mathf.Lerp(e[ha], e[hb], u);
+            y -= (sx[hb] - sx[ha]) * SagFraction * Mathf.Sin(u * Mathf.PI);   // sag scales with the run
+            if (!float.IsNegativeInfinity(g[i]) && y < g[i]) y = g[i];        // sag must not dig in
+            var pt = Vector3.Lerp(tieA, tieB, i / (float)segs);
+            pt.y = y;
             path[i] = pt;
+        }
+
+        // 4) corner rounding: a ROUNDED hummock contributes several close hull vertices whose short
+        // chords read as visible kinks (user screenshot 2026-07-18); a sharp rock edge (one vertex)
+        // is fine. Two Chaikin passes bend the cord smoothly, then re-clamp so cut corners don't
+        // dip into the crest they were cut from.
+        path = Chaikin(path);
+        for (int i = 0; i < path.Length; i++)
+        {
+            var p = path[i];
+            float t = horiz > 0.01f
+                ? (new Vector2(p.x - tieA.x, p.z - tieA.z)).magnitude / horiz : 0f;
+            float f = Mathf.Clamp(t * segs, 0f, segs - 0.001f);
+            int i0 = (int)f;
+            float ga = g[i0], gb = g[i0 + 1];
+            if (float.IsNegativeInfinity(ga) || float.IsNegativeInfinity(gb)) continue;
+            float floorY = Mathf.Lerp(ga, gb, f - i0);
+            if (p.y < floorY) { p.y = floorY; path[i] = p; }
         }
 
         var mesh = BuildTube(path, RopeRadius, RopeSides, line.Dir);
@@ -593,6 +649,47 @@ internal static class LaserLine
     }
 
     /// <summary>Build one smooth tube mesh (world-space) following a path; smooth normals = no seams.</summary>
+    /// <summary>Open-polyline Chaikin corner-cutting, endpoints pinned (the knots must stay tied to
+    /// the stakes). Two passes ≈ quarter-circle rounding of every kink; point count ~4x.</summary>
+    private static Vector3[] Chaikin(Vector3[] pts)
+    {
+        for (int pass = 0; pass < 2; pass++)
+        {
+            int n = pts.Length;
+            if (n < 3) return pts;
+            var outPts = new Vector3[2 * n - 2];
+            int k = 0;
+            outPts[k++] = pts[0];
+            for (int i = 0; i < n - 1; i++)
+            {
+                if (i > 0) outPts[k++] = Vector3.Lerp(pts[i], pts[i + 1], 0.25f);
+                if (i < n - 2) outPts[k++] = Vector3.Lerp(pts[i], pts[i + 1], 0.75f);
+            }
+            outPts[k++] = pts[n - 1];
+            pts = outPts;
+        }
+        return pts;
+    }
+
+    /// <summary>Ground height under a rope sample — nearest STATIC hit only. The plain Raycast
+    /// version returned whatever crossed the ray at build time and baked it into the tube — user
+    /// 2026-07-18: a passing squirrel left its silhouette in the string. Anything with an attached
+    /// Rigidbody (animals, players, dropped props) is not ground.</summary>
+    private static bool TryGroundY(Vector3 pt, out float y)
+    {
+        y = 0f;
+        float best = float.MaxValue;
+        var hits = Physics.RaycastAll(pt + Vector3.up * 30f, Vector3.down, 60f, AimMask,
+            QueryTriggerInteraction.Ignore);
+        foreach (var h in hits)
+        {
+            var col = h.collider;
+            if (col == null || col.attachedRigidbody != null) continue;   // dynamic body — skip
+            if (h.distance < best) { best = h.distance; y = h.point.y; }
+        }
+        return best < float.MaxValue;
+    }
+
     private static Mesh BuildTube(Vector3[] path, float radius, int sides, Vector3 fallbackDir)
     {
         int n = path.Length;
