@@ -42,7 +42,7 @@ internal static class HardSurfaceImpactCrashGuard
         if (!_loggedActive)
         {
             _loggedActive = true;
-            RLog.Msg(System.ConsoleColor.DarkYellow, "[BuildingLaser] crash-guard ACTIVE (TryTriggerHardSurfaceImpact prefix is running)");
+            Dbg.Msg(System.ConsoleColor.DarkYellow, "[BuildingLaser] crash-guard ACTIVE (TryTriggerHardSurfaceImpact prefix is running)");
         }
         if (impactCollider == null) return true;
         var mesh = impactCollider.TryCast<MeshCollider>();
@@ -65,7 +65,7 @@ internal static class HardSurfaceImpactCrashGuard
             if (nonConvex || partialHull)
             {
                 if (_skipped < 6)
-                    RLog.Msg(System.ConsoleColor.DarkYellow,
+                    Dbg.Msg(System.ConsoleColor.DarkYellow,
                         $"[BuildingLaser] crash-guard: skipped hard-surface SFX on {(nonConvex ? "non-convex" : "partial-hull")} mesh '{impactCollider.name}' (would crash via ClosestPoint) #{_skipped + 1}");
                 _skipped++;
                 return false;   // ClosestPoint would throw / native-crash

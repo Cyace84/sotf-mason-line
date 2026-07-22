@@ -32,7 +32,14 @@ internal static class LaserLine
         {
             if (StakeA != null) Object.Destroy(StakeA);
             if (StakeB != null) Object.Destroy(StakeB);
-            if (Rope != null) Object.Destroy(Rope);
+            if (Rope != null)
+            {
+                // the tube mesh is generated per line (BuildTube) — destroying the GO does NOT
+                // free it; without this a long place->collect session leaks a mesh per line
+                var mf = Rope.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) Object.Destroy(mf.sharedMesh);
+                Object.Destroy(Rope);
+            }
             if (KnotA != null) Object.Destroy(KnotA);
             if (KnotB != null) Object.Destroy(KnotB);
         }
@@ -41,7 +48,6 @@ internal static class LaserLine
     private static readonly System.Collections.Generic.List<Line> _lines = new();
 
     public static bool HasLine => _lines.Count > 0;
-    public static bool SnapActive;
 
     private static bool _haveA;
     private static Vector3 _pointA;
@@ -158,9 +164,8 @@ internal static class LaserLine
         PlayPlaceSound(p);
         BuildRope(line);
         _lines.Add(line);
-        SnapActive = true;   // the line is there to be used — arm the snap immediately (K toggles off)
         LineTool.ConsumeKit();   // kit economy: the placed line IS the kit — it leaves the inventory
-        RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line #{_lines.Count} set, {line.SegLen:0.0}m — snap ON (K toggles, C on a stake collects)");
+        RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line #{_lines.Count} set, {line.SegLen:0.0}m — logs placed near it snap on (hold C on a stake to collect)");
     }
 
     /// <summary>Is the crosshair pointing at one of the planted stakes? Vanilla-style: the game
@@ -271,7 +276,7 @@ internal static class LaserLine
             var payload = new GameObject("Renderable");   // clip curves bind to this child name
             payload.transform.SetParent(_wobbleRoot.transform, false);
             _wobblePayload = payload.transform;
-            RLog.Msg(System.ConsoleColor.Cyan, "[BuildingLaser] vanilla wobble rig ready");
+            Dbg.Msg(System.ConsoleColor.Cyan, "[BuildingLaser] vanilla wobble rig ready");
         }
         catch (System.Exception e) { RLog.Warning($"[BuildingLaser] wobble rig init failed: {e.Message}"); }
     }
@@ -422,7 +427,6 @@ internal static class LaserLine
         _lines.Clear();
         if (_pendingStake != null) { Object.Destroy(_pendingStake); _pendingStake = null; }
         _haveA = false;
-        SnapActive = false;
         _aimedLine = null;
         _aimedPending = false;
         _shaking = false;
@@ -441,17 +445,9 @@ internal static class LaserLine
         _stakeMat = null; _stakeMatTried = false;
         _knotMesh = null; _knotMeshTried = false;
         _stakeMesh = null; _stakeMeshTried = false;
-    }
-
-    /// <summary>J: tear down EVERYTHING — all lines (one kit refunded each) + the pending stake.</summary>
-    public static void Clear()
-    {
-        foreach (var ln in _lines) { ln.Destroy(); LineTool.RefundKit(); }
-        _lines.Clear();
-        if (_pendingStake != null) Object.Destroy(_pendingStake);
-        _pendingStake = null;
-        _haveA = false;
-        RLog.Msg(System.ConsoleColor.Yellow, "[BuildingLaser] all lines cleared");
+        // the adopted ghost material died with the world — without this reset the next world's
+        // ghost would skip adoption forever and degrade to the flat tint (2026-07-22 review)
+        _ghostVanillaMat = false;
     }
 
     /// <summary>Snap capture zone: max sideways distance (m) from the string for a placement to
@@ -487,7 +483,10 @@ internal static class LaserLine
     }
 
     /// <summary>Per-frame: translucent ghost stake at the aim point while defining the line
-    /// (aiming A, or B after A) — shows exactly where the stake will be planted.</summary>
+    /// (aiming A, or B after A) — shows exactly where the stake will be planted.
+    /// NOTE: the adopted-material object may be OUR `new Material(shader)` (one per world at most)
+    /// — intentionally not destroyed on reset, we cannot tell it apart from the game's shared
+    /// ghost material asset, and destroying THAT would break vanilla ghosts.</summary>
     public static void UpdateGhost(bool toolHeld)
     {
         // ghost shows while finishing a line (B pending) or when another kit is ready to start one
@@ -529,21 +528,9 @@ internal static class LaserLine
             }
             rend.sharedMaterial = m;
             _ghostVanillaMat = true;
-            RLog.Msg($"[BuildingLaser] ghost adopted the vanilla ghost material: {m.name} ({m.shader?.name})");
+            Dbg.Msg($"[BuildingLaser] ghost adopted the vanilla ghost material: {m.name} ({m.shader?.name})");
         }
         catch { }
-    }
-
-    /// <summary>Snap cue: tint the rope material instance (warm = armed, grey = off). HDRP may ignore
-    /// .color; harmless if so (the K-toggle also logs state).</summary>
-    public static void RefreshRopeCue()
-    {
-        foreach (var ln in _lines)
-        {
-            if (ln.Rope == null) continue;
-            var rend = ln.Rope.GetComponent<Renderer>();
-            if (rend != null) rend.material.color = SnapActive ? Color.white : new Color(0.6f, 0.6f, 0.6f);
-        }
     }
 
     // ---- rope: one continuous tube mesh along a catenary ----
@@ -640,12 +627,11 @@ internal static class LaserLine
         ropeGo.GetComponent<MeshFilter>().mesh = mesh;
         var rmat = RopeMaterial();
         var rr = ropeGo.GetComponent<Renderer>();
-        if (rmat != null) rr.material = new Material(rmat);   // instance so tint doesn't touch the shared mat
+        if (rmat != null) rr.sharedMaterial = rmat;   // shared: no tinting anymore, no instance leak
         line.Rope = ropeGo;
 
         line.KnotA = MakeKnot("BuildingLaserKnotA", tieA, line.Dir);
         line.KnotB = MakeKnot("BuildingLaserKnotB", tieB, line.Dir);
-        RefreshRopeCue();
     }
 
     /// <summary>Build one smooth tube mesh (world-space) following a path; smooth normals = no seams.</summary>

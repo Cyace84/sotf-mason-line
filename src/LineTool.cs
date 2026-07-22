@@ -126,6 +126,14 @@ internal static class LineTool
     {
         LaserLine.ResetWorld();
         _kitsOut = 0;
+        // per-world pipeline state: without this, menu-time Ticks kept scanning dead scene objects
+        // (Ready stayed true) and the doc on Ready ("for this world") was a lie (2026-07-22 review)
+        Ready = false;
+        _invItem = null;
+        _invGroup = null;
+        _invOutliners.Clear();
+        _craftRoot = null;
+        _poseFrames = -1;
     }
 
     // Save-slot id source: GameSetupManager.GetSelectedSaveId() is only valid in the LOAD MENU —
@@ -258,6 +266,40 @@ internal static class LineTool
                 RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] {given} kit(s) were staked out when this save was made — returned");
         }
         catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit marker restore failed: {ex.Message}"); }
+    }
+
+    /// <summary>Register the ItemData BEFORE the save deserializes. ROOT CAUSE (2026-07-22, user
+    /// lost a saved kit): inventory deserialization runs during world load, but RegisterItemOnce
+    /// used to run only at OnAfterSpawn (Latest.log 2026-07-22: "DESERIALIZING" 05:24:22 vs
+    /// "Builder's Line ready" 05:24:27) — an ItemId the database doesn't know at deserialize time
+    /// is silently DROPPED from the loaded inventory (save file had ItemBlock 9417, in-game
+    /// inventory came up without it, zero kit log lines). In-process world reloads were immune
+    /// (ItemData already registered from the first spawn), only a COLD game start lost the kit.
+    /// Called from OnSdkInitialized (title) and from the SaveGameManager.Load prefix (last line of
+    /// defence, fires right before deserialize). Spawn-time Setup stays as the fallback.</summary>
+    internal static void TryRegisterEarly(string context)
+    {
+        try
+        {
+            if (ItemTools.IsItemRegistered(ItemId)) return;
+            if (ItemDatabaseManager._itemsCache == null || ItemDatabaseManager._instance == null)
+            {
+                RLog.Msg($"[BuildingLaser] item DB not ready at {context} — deferring registration");
+                return;
+            }
+            if (!ItemDatabaseManager.TryFindItemById(TemplateItemId, out var tpl) || tpl == null)
+            {
+                RLog.Msg($"[BuildingLaser] template item {TemplateItemId} not in DB at {context} — deferring registration");
+                return;
+            }
+            RegisterItemOnce();
+            RLog.Msg(System.ConsoleColor.Cyan,
+                $"[BuildingLaser] item {ItemId} registered early ({context}) — saved kits survive a cold start");
+        }
+        catch (System.Exception ex)
+        {
+            RLog.Warning($"[BuildingLaser] early item registration failed at {context}: {ex.Message} — spawn-time fallback stays");
+        }
     }
 
     /// <summary>App-lifetime work: ItemData + held template survive world reloads (DontDestroyOnLoad).</summary>
@@ -437,15 +479,18 @@ internal static class LineTool
                 // into a ~1m dead-zone that blocks selecting neighbouring items; a TRIGGER (not solid) avoids
                 // the BackpackGroundMesh contact-SFX crash.
                 var cap = stake.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<CapsuleCollider>()).TryCast<CapsuleCollider>();
-                cap.direction = 2;         // along the branch (local Z)
-                cap.radius = 0.04f;
-                cap.height = 0.75f;
-                cap.center = Vector3.zero;
-                // NOT a trigger: the inventory hover raycaster (CameraMouseEvents.ManagedUpdate ->
-                // SendMessage("OnMouseEnterCollider")) does not fire on trigger colliders — vanilla items
-                // (StunGun etc.) all use solid colliders on layer 23. No rigidbody here, so no contact
-                // SFX events; the ClosestPoint crash class is covered by the CrashGuardPatch finalizer.
-                cap.isTrigger = false;
+                if (cap != null)
+                {
+                    cap.direction = 2;     // along the branch (local Z)
+                    cap.radius = 0.04f;
+                    cap.height = 0.75f;
+                    cap.center = Vector3.zero;
+                    // NOT a trigger: the inventory hover raycaster (CameraMouseEvents.ManagedUpdate ->
+                    // SendMessage("OnMouseEnterCollider")) does not fire on trigger colliders — vanilla items
+                    // (StunGun etc.) all use solid colliders on layer 23. No rigidbody here, so no contact
+                    // SFX events; the ClosestPoint crash class is covered by the CrashGuardPatch finalizer.
+                    cap.isTrigger = false;
+                }
             }
         }
         else
@@ -532,7 +577,7 @@ internal static class LineTool
             // a new clone appeared => a new CustomItemRenderable may exist un-fixed; flag+sanitize it
             // BEFORE its next SetItemInstance (poison) or OnEnable (detonation). 2026-07-16 crash window.
             FixRenderableLoadedFlags();
-            RLog.Msg(System.ConsoleColor.Cyan, $"[BuildingLaser] craft-mat pose applied (SV {id})");
+            Dbg.Msg(System.ConsoleColor.Cyan, $"[BuildingLaser] craft-mat pose applied (SV {id})");
             return;
         }
     }
@@ -578,6 +623,7 @@ internal static class LineTool
             var mo = existing != null
                 ? existing.TryCast<MeshOutliner>()
                 : go.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshOutliner>()).TryCast<MeshOutliner>();
+            if (mo == null) continue;
             mo._renderer = rd;
             mo._thickness = 4f;
             mo._color = Color.white;
@@ -592,7 +638,7 @@ internal static class LineTool
         bool proxied = false;
         foreach (var mf in filters)
             if (mf.GetComponent(Il2CppInterop.Runtime.Il2CppType.Of<Endnight.Utilities.MouseEventsProxy>()) != null) { proxied = true; break; }
-        RLog.Msg(System.ConsoleColor.Cyan,
+        Dbg.Msg(System.ConsoleColor.Cyan,
             $"[BuildingLaser] inventory hover wired ({_invOutliners.Count} outliners, layer {invLayer}, proxy={proxied})");
     }
 
@@ -656,15 +702,13 @@ internal static class LineTool
             {
                 ar._cachedLoadedObject = model;
                 patched++;
-                RLog.Msg(System.ConsoleColor.Cyan,
+                Dbg.Msg(System.ConsoleColor.Cyan,
                     $"[BuildingLaser] renderable loaded-flag fixed: {ar.name} -> {model.name}");
             }
             if (SanitizeRenderable(ar)) sanitized++;
         }
         if (sanitized > 0)
-            RLog.Msg(System.ConsoleColor.Cyan, $"[BuildingLaser] renderable events sanitized: {sanitized}");
-        if (patched == 0 && sanitized == 0)
-            RLog.Msg("[BuildingLaser] renderable loaded-flag: nothing to fix (ok if already patched)");
+            Dbg.Msg(System.ConsoleColor.Cyan, $"[BuildingLaser] renderable events sanitized: {sanitized}");
     }
 
     /// <summary>Replace a renderable's _onRenderableLoaded with a fresh event, once per instance.

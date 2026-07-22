@@ -66,7 +66,7 @@ internal static class RenderablePatch
             // ours: best-effort defuse the event too, then NEVER Invoke — nothing we rely on listens
             var ar = __instance as Endnight.Rendering.AssetReferenceRenderable;
             if (ar != null && LineTool.SanitizeRenderable(ar))
-                RLog.Msg(System.ConsoleColor.Cyan,
+                Dbg.Msg(System.ConsoleColor.Cyan,
                     $"[BuildingLaser] OnEnable guard: sanitized + muted Invoke for {go.name}");
             return false;                                                        // skip original
         }

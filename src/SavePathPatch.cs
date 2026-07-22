@@ -20,5 +20,11 @@ internal static class SavePathPatch
 
     [HarmonyPatch(typeof(SaveGameManager), "Load", new System.Type[] { typeof(string), typeof(SaveGameType) })]
     [HarmonyPrefix]
-    private static void BeforeLoad(string dir) => LineTool.OnLoadDir(dir);
+    private static void BeforeLoad(string dir)
+    {
+        // Register our ItemId BEFORE the inventory deserializes: unknown ids are dropped from the
+        // loaded inventory (cold-start kit loss, 2026-07-22 — see LineTool.TryRegisterEarly).
+        LineTool.TryRegisterEarly("pre-load");
+        LineTool.OnLoadDir(dir);
+    }
 }

@@ -27,7 +27,7 @@ internal static class PlacePatch
 
     private static void Postfix(TargetInfo __instance)
     {
-        if (_busy || !LaserLine.SnapActive || !LaserLine.HasLine || __instance == null) return;
+        if (_busy || !LaserLine.HasLine || __instance == null) return;
 
         try
         {
