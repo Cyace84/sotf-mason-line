@@ -694,9 +694,7 @@ internal static class LineTool
             var p = ar.transform;
             for (int i = 0; p != null && i < 8; i++) { if (p.name.Contains("BuildersLine")) { ours = true; break; } p = p.parent; }
             if (!ours) continue;
-            GameObject? model = null;
-            foreach (var t in ar.GetComponentsInChildren<Transform>(true))
-                if (t.name == "BuildersLineInvModel(Clone)") { model = t.gameObject; break; }
+            var model = FindOurInvModel(ar);
             if (model == null) continue;
             if (!ar.IsObjectLoaded)
             {
@@ -720,6 +718,17 @@ internal static class LineTool
         if (!_sanitizedRenderables.Add(ar.GetInstanceID())) return false;
         ar.__onRenderableLoaded_k__BackingField = new UnityEngine.Events.UnityEvent<Transform>();
         return true;
+    }
+
+    /// <summary>The one place that knows how to locate our injected inventory model under a
+    /// CustomItemRenderable (Unity's "(Clone)" suffix + our prefab name). Shared by the sweep and
+    /// the crash-site guard so the brittle name-match lives in exactly one spot.</summary>
+    internal const string InvModelCloneName = "BuildersLineInvModel(Clone)";
+    internal static GameObject? FindOurInvModel(Endnight.Rendering.AssetReferenceRenderable ar)
+    {
+        foreach (var t in ar.GetComponentsInChildren<Transform>(true))
+            if (t.name == InvModelCloneName) return t.gameObject;
+        return null;
     }
 
     /// <summary>Add the crafting recipe unless a previous world already registered it
