@@ -45,32 +45,47 @@ internal static class HardSurfaceImpactCrashGuard
             Dbg.Msg(System.ConsoleColor.DarkYellow, "[BuildingLaser] crash-guard ACTIVE (TryTriggerHardSurfaceImpact prefix is running)");
         }
         if (impactCollider == null) return true;
+
+        // WHITELIST (2026-07-24 rewrite). Prior blacklist ("skip non-convex OR vertexCount>256") had a
+        // hole: with the guard PROVABLY live + firing (Latest.log "crash-guard ACTIVE" + skips on
+        // MergedCollisionPart805/936), Player.log STILL logged 21x "ClosestPoint can only be used with
+        // ... convex MeshCollider" from THIS method, stack TryTriggerHardSurfaceImpact←ReportContacts
+        // ←OnSceneContact, right after the BackpackGroundMesh partial-hull cook. So BackpackGroundMesh
+        // reached ClosestPoint despite the guard: it read as convex==true (marked convex, only cooked
+        // partial) and/or sharedMesh.vertexCount was not readable under IL2CPP, so the old sub-check
+        // passed it. Unity's ClosestPoint here LOGS-and-continues (no "swallowed" Finalizer line ever
+        // fired) — the crash is the >1,000,000-line log spam ([ line 1038888 ] collapse) saturating
+        // RLog/Unity I/O under Wine, not a thrown exception.
+        //
+        // New rule: ClosestPoint is only valid on Box/Sphere/Capsule or a convex, cook-clean Mesh. We
+        // cannot cheaply PROVE a mesh cooked clean, so default to SKIP on any uncertainty. Allow SFX
+        // only when the collider is provably safe. Cost = a cosmetic impact sound on mesh/terrain
+        // surfaces; never a crash. TerrainCollider is also unsafe for ClosestPoint — skip it too.
         var mesh = impactCollider.TryCast<MeshCollider>();
         if (mesh != null)
         {
-            // Two bad cases, one skip:
-            // (1) non-convex MeshCollider — ClosestPoint throws a MANAGED exception (Finalizer would
-            //     catch it, prefix saves the throw entirely);
-            // (2) convex==true but the hull was COOKED PARTIAL — source mesh over the 256-polygon
-            //     cook limit ("Couldn't create a Convex Mesh ... partial hull will be used",
-            //     BackpackGroundMesh / LogAMeshLOD0 / Tuxedo...). ClosestPoint on the degenerate hull
-            //     dies INSIDE native PhysX — no managed exception, Finalizer useless, process gone.
-            //     That was the 2026-07-16 02:06 crash: click crafted item → contact with backpack mat →
-            //     silence in Latest.log, cook warning as Player.log's last line.
-            //     Runtime proxy for "partial": vertexCount > 256 — may skip SFX on some healthy hulls
-            //     too, which costs a sound, never a crash.
-            bool nonConvex = !mesh.convex;
             var sm = mesh.sharedMesh;
-            bool partialHull = !nonConvex && sm != null && sm.vertexCount > 256;
-            if (nonConvex || partialHull)
+            int vcount = sm != null ? sm.vertexCount : -1;
+            bool provablySafe = mesh.convex && sm != null && vcount <= 256;
+            if (!provablySafe)
             {
-                if (_skipped < 6)
+                if (_skipped < 8)
                     Dbg.Msg(System.ConsoleColor.DarkYellow,
-                        $"[BuildingLaser] crash-guard: skipped hard-surface SFX on {(nonConvex ? "non-convex" : "partial-hull")} mesh '{impactCollider.name}' (would crash via ClosestPoint) #{_skipped + 1}");
+                        $"[BuildingLaser] crash-guard: skipped SFX on MeshCollider '{impactCollider.name}' (convex={mesh.convex}, verts={vcount}) — not provably ClosestPoint-safe #{_skipped + 1}");
                 _skipped++;
-                return false;   // ClosestPoint would throw / native-crash
+                return false;
             }
+            return true;   // convex + readable mesh ≤256 verts — safe, play SFX
         }
+        if (impactCollider.TryCast<TerrainCollider>() != null)
+        {
+            if (_skipped < 8)
+                Dbg.Msg(System.ConsoleColor.DarkYellow,
+                    $"[BuildingLaser] crash-guard: skipped SFX on TerrainCollider '{impactCollider.name}' (ClosestPoint-unsafe) #{_skipped + 1}");
+            _skipped++;
+            return false;
+        }
+        // Box / Sphere / Capsule (or anything TryCast<MeshCollider> can't see): ClosestPoint-safe.
         return true;
     }
 

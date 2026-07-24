@@ -35,6 +35,57 @@ public class LaserMod : SonsMod
         RLog.Msg(System.ConsoleColor.Cyan,
             "[BuildingLaser] initialized — craft the Builder's String Line (stick + rope), " +
             "hold it: LMB/L plants a stake, hold C on a stake to collect the line");
+        // NOTE: do NOT verify here — RedLoader applies HarmonyPatchAll AFTER OnInitializeMod, so an
+        // init-time GetPatchInfo reports a FALSE 'MISSING' (proven 2026-07-24: init said MISSING yet
+        // the guard fired skips later same session). Verify on the first Tick instead.
+    }
+
+    private bool _guardVerified;
+
+    /// <summary>
+    /// Deterministic detour-liveness check (inventory-crash hunt 2026-07-23). The 07-23 crash
+    /// session logged 12x "ClosestPoint can only be used with..." FROM INSIDE
+    /// TryTriggerHardSurfaceImpact — statically impossible if the prefix runs (ISIL: ClosestPoint
+    /// is invoked on impactCollider only, the exact object the prefix filters; both call sites —
+    /// OnTriggerEnter call and OnCollisionEnter tail-jmp — enter the patched first byte). So the
+    /// open question is WHETHER the Harmony detour was installed at all that session. This logs the
+    /// answer at startup, before any gameplay contact.
+    /// </summary>
+    private void VerifyCrashGuardInstalled()
+    {
+        const string marker = "guard-diag-2";   // build marker — Cheapest-Probe rule
+        try
+        {
+            VerifyDetour(marker, "sfx-guard",
+                HarmonyLib.AccessTools.Method(
+                    typeof(Sons.Gameplay.ObjectPhysicsInteractionSfx),
+                    nameof(Sons.Gameplay.ObjectPhysicsInteractionSfx.TryTriggerHardSurfaceImpact)));
+            VerifyDetour(marker, "listener-guard",
+                HarmonyLib.AccessTools.Method(
+                    typeof(Endnight.Rendering.AssetReferenceRenderable),
+                    nameof(Endnight.Rendering.AssetReferenceRenderable.AddOnRenderableLoadedListener)));
+        }
+        catch (System.Exception e)
+        {
+            RLog.Error($"[BuildingLaser][{marker}] guard verification threw: {e.GetType().Name}: {e.Message}");
+        }
+    }
+
+    private static void VerifyDetour(string marker, string label, System.Reflection.MethodBase? target)
+    {
+        if (target == null)
+        {
+            RLog.Error($"[BuildingLaser][{marker}] {label}: target method NOT FOUND — guard is DEAD");
+            return;
+        }
+        var info = HarmonyLib.Harmony.GetPatchInfo(target);
+        int prefixes = info?.Prefixes?.Count ?? 0;
+        if (prefixes > 0)
+            RLog.Msg(System.ConsoleColor.Green,
+                $"[BuildingLaser][{marker}] {label} detour VERIFIED: {prefixes} prefix on {target.Name}");
+        else
+            RLog.Error(
+                $"[BuildingLaser][{marker}] {label} detour MISSING (prefixes=0) on {target.Name} — HarmonyPatchAll did not take");
     }
 
     private const float CollectHoldSeconds = 0.4f;   // vanilla dismantle Hold(duration=0.4) — recon 2026-07-17
@@ -42,6 +93,7 @@ public class LaserMod : SonsMod
 
     private void Tick()
     {
+        if (!_guardVerified) { _guardVerified = true; VerifyCrashGuardInstalled(); }
         bool held = LineTool.IsHeld;
         // gameplay = mouse captured; while any UI (inventory/book/pause) owns the cursor, clicks
         // must not plant stakes
