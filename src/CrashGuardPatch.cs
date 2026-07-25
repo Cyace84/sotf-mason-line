@@ -3,7 +3,7 @@ using RedLoader;
 using Sons.Gameplay;
 using UnityEngine;
 
-namespace BuildingLaser;
+namespace MasonLine;
 
 /// <summary>
 /// Game-wide crash guard (NOT specific to our item).
@@ -42,7 +42,7 @@ internal static class HardSurfaceImpactCrashGuard
         if (!_loggedActive)
         {
             _loggedActive = true;
-            Dbg.Msg(System.ConsoleColor.DarkYellow, "[BuildingLaser] crash-guard ACTIVE (TryTriggerHardSurfaceImpact prefix is running)");
+            Dbg.Msg(System.ConsoleColor.DarkYellow, "[MasonLine] crash-guard ACTIVE (TryTriggerHardSurfaceImpact prefix is running)");
         }
         if (impactCollider == null) return true;
 
@@ -71,7 +71,7 @@ internal static class HardSurfaceImpactCrashGuard
             {
                 if (_skipped < 8)
                     Dbg.Msg(System.ConsoleColor.DarkYellow,
-                        $"[BuildingLaser] crash-guard: skipped SFX on MeshCollider '{impactCollider.name}' (convex={mesh.convex}, verts={vcount}) — not provably ClosestPoint-safe #{_skipped + 1}");
+                        $"[MasonLine] crash-guard: skipped SFX on MeshCollider '{impactCollider.name}' (convex={mesh.convex}, verts={vcount}) — not provably ClosestPoint-safe #{_skipped + 1}");
                 _skipped++;
                 return false;
             }
@@ -81,7 +81,7 @@ internal static class HardSurfaceImpactCrashGuard
         {
             if (_skipped < 8)
                 Dbg.Msg(System.ConsoleColor.DarkYellow,
-                    $"[BuildingLaser] crash-guard: skipped SFX on TerrainCollider '{impactCollider.name}' (ClosestPoint-unsafe) #{_skipped + 1}");
+                    $"[MasonLine] crash-guard: skipped SFX on TerrainCollider '{impactCollider.name}' (ClosestPoint-unsafe) #{_skipped + 1}");
             _skipped++;
             return false;
         }
@@ -101,7 +101,7 @@ internal static class HardSurfaceImpactCrashGuard
         {
             if (_swallowed < 3)
                 RLog.Msg(System.ConsoleColor.DarkYellow,
-                    $"[BuildingLaser] crash-guard: swallowed {__exception.GetType().Name} in TryTriggerHardSurfaceImpact (would native-crash) #{_swallowed + 1}");
+                    $"[MasonLine] crash-guard: swallowed {__exception.GetType().Name} in TryTriggerHardSurfaceImpact (would native-crash) #{_swallowed + 1}");
             _swallowed++;
         }
         return null;   // suppress → nothing propagates to the native callback

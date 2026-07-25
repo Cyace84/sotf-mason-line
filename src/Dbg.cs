@@ -1,6 +1,6 @@
 using RedLoader;
 
-namespace BuildingLaser;
+namespace MasonLine;
 
 /// <summary>Diagnostic logging gate. The wiring/patch internals were invaluable during development
 /// but are noise for players; flip <see cref="Verbose"/> to true when hunting a bug report.

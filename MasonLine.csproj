@@ -4,8 +4,8 @@
     <TargetFramework>net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <AssemblyName>BuildingLaser</AssemblyName>
-    <RootNamespace>BuildingLaser</RootNamespace>
+    <AssemblyName>MasonLine</AssemblyName>
+    <RootNamespace>MasonLine</RootNamespace>
     <Version>1.0.0</Version>
     <Description>A straight guide line for Sons of the Forest: the build ghost of a free log snaps to it, so the first log of a wall lays dead-straight.</Description>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>

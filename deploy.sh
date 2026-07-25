@@ -4,7 +4,7 @@ GAME_DIR="/Users/cyace84/Library/Application Support/CrossOver/Bottles/Steam-2/d
 cd "$(dirname "$0")"
 export PATH="$HOME/.dotnet:$PATH" DOTNET_ROOT="$HOME/.dotnet"
 dotnet build | tail -8
-mkdir -p "$GAME_DIR/Mods/BuildingLaser"
-cp bin/Debug/BuildingLaser.dll "$GAME_DIR/Mods/BuildingLaser.dll"
-cp manifest.json "$GAME_DIR/Mods/BuildingLaser/manifest.json"
-echo "deployed -> $GAME_DIR/Mods/BuildingLaser.dll"
+mkdir -p "$GAME_DIR/Mods/MasonLine"
+cp bin/Debug/MasonLine.dll "$GAME_DIR/Mods/MasonLine.dll"
+cp manifest.json "$GAME_DIR/Mods/MasonLine/manifest.json"
+echo "deployed -> $GAME_DIR/Mods/MasonLine.dll"

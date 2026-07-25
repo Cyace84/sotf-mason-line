@@ -7,10 +7,10 @@ using TheForest.Items.Inventory;
 using TheForest.Utils;
 using UnityEngine;
 
-namespace BuildingLaser;
+namespace MasonLine;
 
 /// <summary>
-/// The craftable "Builder's String Line" item: stick + rope at the crafting mat.
+/// The craftable "Mason Line" item: stick + rope at the crafting mat.
 /// ItemData is a clone of GPSLocator (529) — proven equippable/craftable/droppable template with
 /// RightHand slot + sane held anim vars. The held visual is a GPS held-prefab clone with the GPS
 /// behaviours stripped and a stake+knot model in their place; the game instantiates it into the
@@ -82,7 +82,7 @@ internal static class LineTool
             RegisterItemOnce();
 
             var data = ItemDatabaseManager.ItemById(ItemId);
-            if (data == null) { RLog.Error("[BuildingLaser] item data missing after registration"); return; }
+            if (data == null) { RLog.Error("[MasonLine] item data missing after registration"); return; }
 
             // Per-world work: the inventory/crafting UI + player props are scene objects.
             var builder = new ItemTools.ItemBuilder(BuildModelPrefab("BuildersLineInvModel"), data);
@@ -99,13 +99,13 @@ internal static class LineTool
             Ready = true;
             RestoreKitsFromMarker();
             RLog.Msg(System.ConsoleColor.Cyan,
-                "[BuildingLaser] Builder's Line ready — craft: 1 stick + 1 rope, equip it to place the line");
+                "[MasonLine] Builder's Line ready — craft: 1 stick + 1 rope, equip it to place the line");
         }
         catch (System.Exception ex)
         {
             Ready = false;
             _setupFailed = true;
-            RLog.Error($"[BuildingLaser] item setup failed (hotkeys stay ungated): {ex}");
+            RLog.Error($"[MasonLine] item setup failed (hotkeys stay ungated): {ex}");
         }
     }
 
@@ -118,7 +118,7 @@ internal static class LineTool
     // AmountOf decompile 2026-07-16.
     private static int _kitsOut;   // kits currently staked out as standing lines (multi-line 2026-07-17)
     private static string KitMarkerPath =>
-        System.IO.Path.Combine(Application.persistentDataPath, "BuildingLaser.line-out");
+        System.IO.Path.Combine(Application.persistentDataPath, "MasonLine.line-out");
 
     /// <summary>SdkEvents.OnWorldExited (quit to menu): lines are NOT in the save and must not leak
     /// into the next world — DDoL carried them across reloads => user-repro'd kit dupe 2026-07-17.</summary>
@@ -202,11 +202,11 @@ internal static class LineTool
             if (inv.RemoveItem(ItemId, 1, false, true, true, null, true))
             {
                 _kitsOut++;
-                RLog.Msg(System.ConsoleColor.Yellow, $"[BuildingLaser] kit staked out ({_kitsOut} in the field) — collect the line (C) to get it back");
+                RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] kit staked out ({_kitsOut} in the field) — collect the line (C) to get it back");
             }
-            else RLog.Warning("[BuildingLaser] kit consume failed (RemoveItem=false) — line placed anyway");
+            else RLog.Warning("[MasonLine] kit consume failed (RemoveItem=false) — line placed anyway");
         }
-        catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit consume failed: {ex.Message}"); }
+        catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit consume failed: {ex.Message}"); }
     }
 
     /// <summary>One line collected/cleared: put ONE kit back. Gated by the out-counter, so a C on
@@ -221,11 +221,11 @@ internal static class LineTool
             {
                 _kitsOut--;
                 FixRenderableLoadedFlags();   // re-add touches the layout item; make sure its renderable is safe
-                RLog.Msg(System.ConsoleColor.Green, "[BuildingLaser] kit returned to the inventory");
+                RLog.Msg(System.ConsoleColor.Green, "[MasonLine] kit returned to the inventory");
             }
-            else RLog.Warning("[BuildingLaser] kit refund failed (AddItem=false) — count kept, the save-time marker will restore it");
+            else RLog.Warning("[MasonLine] kit refund failed (AddItem=false) — count kept, the save-time marker will restore it");
         }
-        catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit refund failed: {ex.Message}"); }
+        catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit refund failed: {ex.Message}"); }
     }
 
     /// <summary>World load: lines never survive a reload (ResetWorld), so kits stamped as staked-out
@@ -263,9 +263,9 @@ internal static class LineTool
             int given = 0;
             for (int i = 0; i < n; i++) if (inv.AddItem(ItemId)) given++;
             if (given > 0)
-                RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] {given} kit(s) were staked out when this save was made — returned");
+                RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] {given} kit(s) were staked out when this save was made — returned");
         }
-        catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] kit marker restore failed: {ex.Message}"); }
+        catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit marker restore failed: {ex.Message}"); }
     }
 
     /// <summary>Register the ItemData BEFORE the save deserializes. ROOT CAUSE (2026-07-22, user
@@ -284,21 +284,21 @@ internal static class LineTool
             if (ItemTools.IsItemRegistered(ItemId)) return;
             if (ItemDatabaseManager._itemsCache == null || ItemDatabaseManager._instance == null)
             {
-                RLog.Msg($"[BuildingLaser] item DB not ready at {context} — deferring registration");
+                RLog.Msg($"[MasonLine] item DB not ready at {context} — deferring registration");
                 return;
             }
             if (!ItemDatabaseManager.TryFindItemById(TemplateItemId, out var tpl) || tpl == null)
             {
-                RLog.Msg($"[BuildingLaser] template item {TemplateItemId} not in DB at {context} — deferring registration");
+                RLog.Msg($"[MasonLine] template item {TemplateItemId} not in DB at {context} — deferring registration");
                 return;
             }
             RegisterItemOnce();
             RLog.Msg(System.ConsoleColor.Cyan,
-                $"[BuildingLaser] item {ItemId} registered early ({context}) — saved kits survive a cold start");
+                $"[MasonLine] item {ItemId} registered early ({context}) — saved kits survive a cold start");
         }
         catch (System.Exception ex)
         {
-            RLog.Warning($"[BuildingLaser] early item registration failed at {context}: {ex.Message} — spawn-time fallback stays");
+            RLog.Warning($"[MasonLine] early item registration failed at {context}: {ex.Message} — spawn-time fallback stays");
         }
     }
 
@@ -321,7 +321,7 @@ internal static class LineTool
         // makes the overflow-drop far rarer; BuildPickupTemplate also strips the crash component.
         data._maxAmount = 20;
         data._uiData._itemId = ItemId;
-        data._uiData._title = "Builder's String Line";
+        data._uiData._title = "Mason Line";
         data._uiData._translationKey = null;
         data._uiData._description =
             "Plant two stakes and stretch a string line between them. Free log placement snaps to the line.";
@@ -577,7 +577,7 @@ internal static class LineTool
             // a new clone appeared => a new CustomItemRenderable may exist un-fixed; flag+sanitize it
             // BEFORE its next SetItemInstance (poison) or OnEnable (detonation). 2026-07-16 crash window.
             FixRenderableLoadedFlags();
-            Dbg.Msg(System.ConsoleColor.Cyan, $"[BuildingLaser] craft-mat pose applied (SV {id})");
+            Dbg.Msg(System.ConsoleColor.Cyan, $"[MasonLine] craft-mat pose applied (SV {id})");
             return;
         }
     }
@@ -639,7 +639,7 @@ internal static class LineTool
         foreach (var mf in filters)
             if (mf.GetComponent(Il2CppInterop.Runtime.Il2CppType.Of<Endnight.Utilities.MouseEventsProxy>()) != null) { proxied = true; break; }
         Dbg.Msg(System.ConsoleColor.Cyan,
-            $"[BuildingLaser] inventory hover wired ({_invOutliners.Count} outliners, layer {invLayer}, proxy={proxied})");
+            $"[MasonLine] inventory hover wired ({_invOutliners.Count} outliners, layer {invLayer}, proxy={proxied})");
     }
 
     /// <summary>Re-apply the tuned wobble pose (frame roll + pivot offset). Called once per backpack
@@ -701,12 +701,12 @@ internal static class LineTool
                 ar._cachedLoadedObject = model;
                 patched++;
                 Dbg.Msg(System.ConsoleColor.Cyan,
-                    $"[BuildingLaser] renderable loaded-flag fixed: {ar.name} -> {model.name}");
+                    $"[MasonLine] renderable loaded-flag fixed: {ar.name} -> {model.name}");
             }
             if (SanitizeRenderable(ar)) sanitized++;
         }
         if (sanitized > 0)
-            Dbg.Msg(System.ConsoleColor.Cyan, $"[BuildingLaser] renderable events sanitized: {sanitized}");
+            Dbg.Msg(System.ConsoleColor.Cyan, $"[MasonLine] renderable events sanitized: {sanitized}");
     }
 
     /// <summary>Replace a renderable's _onRenderableLoaded with a fresh event, once per instance.
@@ -736,7 +736,7 @@ internal static class LineTool
     private static void EnsureRecipe()
     {
         var recipes = GameState.CraftingSystem?._recipeDatabase?._recipes;
-        if (recipes == null) { RLog.Warning("[BuildingLaser] no recipe database; recipe skipped"); return; }
+        if (recipes == null) { RLog.Warning("[MasonLine] no recipe database; recipe skipped"); return; }
 
         for (int i = 0; i < recipes.Count; i++)
         {

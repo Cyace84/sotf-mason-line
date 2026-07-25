@@ -2,7 +2,7 @@ using HarmonyLib;
 using RedLoader;
 using UnityEngine;
 
-namespace BuildingLaser;
+namespace MasonLine;
 
 /// <summary>
 /// Crash-site guard for the 2026-07-24 04:54 inventory crash — the first one with a NAMED corpse.
@@ -61,13 +61,13 @@ internal static class RenderableListenerCrashGuard
             loaded = LineTool.FindOurInvModel(__instance);
             if (loaded != null) __instance._cachedLoadedObject = loaded;
             Dbg.Msg(System.ConsoleColor.Magenta,
-                $"[BuildingLaser] listener-guard: COLD clone (sweep lost race) on '{__instance.name}' " +
+                $"[MasonLine] listener-guard: COLD clone (sweep lost race) on '{__instance.name}' " +
                 $"-> self-healed model={(loaded != null ? loaded.name : "NOT-FOUND")}");
         }
 
         if (_handled < 8)
             Dbg.Msg(System.ConsoleColor.DarkYellow,
-                $"[BuildingLaser] listener-guard: intercepted AddOnRenderableLoadedListener on " +
+                $"[MasonLine] listener-guard: intercepted AddOnRenderableLoadedListener on " +
                 $"CustomItemRenderable '{__instance.name}' (loaded={(loaded != null ? loaded.name : "null")}) #{_handled + 1}");
         _handled++;
 
@@ -76,7 +76,7 @@ internal static class RenderableListenerCrashGuard
             try { callback.Invoke(loaded.transform); }
             catch (System.Exception e)
             {
-                RLog.Warning($"[BuildingLaser] listener-guard: direct callback failed: {e.Message}");
+                RLog.Warning($"[MasonLine] listener-guard: direct callback failed: {e.Message}");
             }
         }
         return false;   // never run the native body → never AddCall on the junk event

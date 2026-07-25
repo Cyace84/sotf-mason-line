@@ -1,22 +1,22 @@
-[size=5][b]Builder's String Line[/b][/size]
+[size=5][b]Mason Line[/b][/size]
 
 Sons of the Forest builds you a perfectly straight wall. That's the problem.
 
-You place the first log by hand and start stacking toward wherever you're headed — a rock, a corner, the edge of your base. Every log after the first snaps cleanly to the one before it, so the wall comes out dead straight. But that first log set the direction, and if it went down a degree or two off, straight is the last thing you want. Ten logs later the wall is level, solid, and arriving half a meter to the left of where you aimed. There's no nudging the angle back. You tear it down and try to eyeball the first log a little better.
+You place the first log by hand and start stacking toward wherever you're headed: a rock, a corner, the edge of your base. Every log after the first snaps cleanly to the one before it, so the wall comes out dead straight. But that first log set the direction, and if it went down a degree or two off, straight is the last thing you want. Ten logs later the wall is level, solid, and arriving half a meter to the left of where you aimed. There's no nudging the angle back. You tear it down and try to eyeball the first log a little better.
 
 I did that three times against the same rock before I gave up and made this.
 
-Builder's String Line is a stake-and-rope kit you craft on the bench. Plant a stake where the wall starts, plant another where it ends, and a cord pulls tight between them. Any log you set down near the cord snaps onto it, so the wall runs from the first stake to the second — the string holds the line instead of your wrist. When you're done, hold C on a stake and the whole kit goes back in your pack.
+Mason Line is a stake-and-rope kit you craft on the bench. Plant a stake where the wall starts, plant another where it ends, and a cord pulls tight between them. Any log you set down near the cord snaps onto it, so the wall runs from the first stake to the second. The string holds the line instead of your wrist. When you're done, hold C on a stake and the whole kit goes back in your pack.
 
 [size=4][b]Controls[/b][/size]
 [list]
-[*]Left-click (or L) while holding the item — plant a stake at the crosshair. First click = stake A, second = stake B, string runs between them.
-[*]Hold C while looking at a stake — collect the line. Kit returns to inventory.
+[*]Left-click while holding the item — plant a stake at the crosshair. First click = stake A, second = stake B, string runs between them.
+[*]Hold your Dismantle key (default C) while looking at a stake — collect the line. Kit returns to inventory.
 [/list]
-Hotkeys are hardcoded for now. Hold-C also crouches — no conflict, the line still collects.
+No custom keybinds. The mod reads your own vanilla bindings: left-click places, the Dismantle action collects. Rebind Dismantle in the controls menu and this follows.
 
 [size=4][b]Multiple lines[/b][/size]
-Each crafted kit is one line. Craft more for parallel lines, corners, whatever layout you need. They all snap at the same time — the log goes to whichever string is closest.
+Each crafted kit is one line. Craft more for parallel lines, corners, whatever layout you need. They all snap at the same time. The log goes to whichever string is closest.
 
 [size=4][b]What it does under the hood[/b][/size]
 One Harmony postfix on [font=Courier New]TargetInfo.CalcRelativePlacePosition[/font]. When a free log's placement lands within 2 meters of a string and between the two stakes, its position and axis get projected onto the line. The build preview, the green/red validation, and the final placed log all read the same field, so they all move together. No grid, no custom buildable, no snap-node registration.
@@ -26,19 +26,19 @@ The mod also patches [font=Courier New]ObjectPhysicsInteractionSfx.TryTriggerHar
 [size=4][b]Install[/b][/size]
 [list=1]
 [*]Install [url=https://github.com/ToniMacaroni/RedLoader]RedLoader[/url] and run the game once.
-[*]Drop [font=Courier New]BuildingLaser.dll[/font] into the game's [font=Courier New]Mods/[/font] folder.
+[*]Drop [font=Courier New]MasonLine.dll[/font] into the game's [font=Courier New]Mods/[/font] folder.
 [*]Start the game. The crafting recipe appears automatically.
 [/list]
 
 [size=4][b]Notes[/b][/size]
 [list]
-[*]Tested in singleplayer. Multiplayer is untested — reports welcome.
+[*]Tested in singleplayer. Multiplayer is untested. Reports welcome.
 [*]The string is a visual guide, not a physical object. NPCs and the player walk through it.
-[*]Saving and loading preserves your kit inventory. Lines on the ground are session-only — pull them out and re-stretch after loading if you need them again.
+[*]Saving and loading preserves your kit inventory. Lines on the ground are session-only. Pull them out and re-stretch after loading if you need them again.
 [/list]
 
 [size=4][b]Bug reports[/b][/size]
-Open an issue on [url=https://github.com/Cyace84/sotf-building-laser/issues]the GitHub tracker[/url] or use the Bugs tab here. Attach [font=Courier New]_Redloader/Latest.log[/font] from the game folder — it has the mod's diagnostic lines.
+Open an issue on [url=https://github.com/Cyace84/sotf-mason-line/issues]the GitHub tracker[/url] or use the Bugs tab here. Attach [font=Courier New]_Redloader/Latest.log[/font] from the game folder. It has the mod's diagnostic lines.
 
 [size=4][b]Source[/b][/size]
-[url=https://github.com/Cyace84/sotf-building-laser]github.com/Cyace84/sotf-building-laser[/url] (MIT)
+[url=https://github.com/Cyace84/sotf-mason-line]github.com/Cyace84/sotf-mason-line[/url] (MIT)

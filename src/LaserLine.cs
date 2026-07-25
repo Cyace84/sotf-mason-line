@@ -2,14 +2,14 @@ using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using RedLoader;
 using UnityEngine;
 
-namespace BuildingLaser;
+namespace MasonLine;
 
 /// <summary>
 /// The active guide line + its in-world visuals (two wooden stakes + a tied, sagging rope) + the
 /// projection math.
 ///
 /// The line is defined by TWO aimed points (A, B), so it runs exactly through two real-world spots.
-/// Visually it's a builder's string line: a wooden stake at each end and a rope strung between them.
+/// Visually it's a mason line: a wooden stake at each end and a rope strung between them.
 /// The rope is ONE continuous procedurally-generated tube mesh following a catenary sag (so lighting
 /// flows smoothly with no visible segment seams), skinned with the game's own RopeLogATileable material,
 /// plus a rope-knot mesh at each stake. While snap is on, the build-ghost placement position is projected
@@ -120,12 +120,12 @@ internal static class LaserLine
     {
         if (!_haveA && !LineTool.HasKit())
         {
-            RLog.Warning("[BuildingLaser] no string line kit in the inventory — craft another (stick + rope)");
+            RLog.Warning("[MasonLine] no string line kit in the inventory — craft another (stick + rope)");
             return;
         }
         if (!TryAimPoint(out var p))
         {
-            RLog.Warning("[BuildingLaser] no surface under the crosshair to plant the stake");
+            RLog.Warning("[MasonLine] no surface under the crosshair to plant the stake");
             return;
         }
 
@@ -133,17 +133,17 @@ internal static class LaserLine
         {
             _pointA = p;
             _haveA = true;
-            _pendingStake = CreateStake("BuildingLaserStakeA");
+            _pendingStake = CreateStake("MasonLineStakeA");
             PlaceStake(_pendingStake, p);
             PlayPlaceSound(p);
-            RLog.Msg(System.ConsoleColor.Green, "[BuildingLaser] stake A planted — aim the far end and press L again");
+            RLog.Msg(System.ConsoleColor.Green, "[MasonLine] stake A planted — aim the far end and press L again");
             return;
         }
 
         var dir = p - _pointA; dir.y = 0f;
         if (dir.sqrMagnitude < 1e-4f)
         {
-            RLog.Warning("[BuildingLaser] second point too close — aim further along the wall");
+            RLog.Warning("[MasonLine] second point too close — aim further along the wall");
             return;
         }
 
@@ -159,13 +159,13 @@ internal static class LaserLine
         _pendingStake = null;
         _haveA = false;
 
-        line.StakeB = CreateStake("BuildingLaserStakeB");
+        line.StakeB = CreateStake("MasonLineStakeB");
         PlaceStake(line.StakeB, p);
         PlayPlaceSound(p);
         BuildRope(line);
         _lines.Add(line);
         LineTool.ConsumeKit();   // kit economy: the placed line IS the kit — it leaves the inventory
-        RLog.Msg(System.ConsoleColor.Green, $"[BuildingLaser] string line #{_lines.Count} set, {line.SegLen:0.0}m — logs placed near it snap on (hold C on a stake to collect)");
+        RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] string line #{_lines.Count} set, {line.SegLen:0.0}m — logs placed near it snap on (hold C on a stake to collect)");
     }
 
     /// <summary>Is the crosshair pointing at one of the planted stakes? Vanilla-style: the game
@@ -267,18 +267,18 @@ internal static class LaserLine
                 if (c.name == "PreviewAnim -  Wobble") _wobbleClip = c;
                 else if (c.name == "PreviewAnim -  WobbleExtraLite") _nudgeClip = c;
             }
-            if (_wobbleClip == null) { RLog.Warning("[BuildingLaser] vanilla Wobble clip not loaded — using soft fallback shake"); return; }
+            if (_wobbleClip == null) { RLog.Warning("[MasonLine] vanilla Wobble clip not loaded — using soft fallback shake"); return; }
             if (_nudgeClip == null) _nudgeClip = _wobbleClip;
 
-            _wobbleRoot = new GameObject("BuildingLaserWobbleProxy");
+            _wobbleRoot = new GameObject("MasonLineWobbleProxy");
             Object.DontDestroyOnLoad(_wobbleRoot);
             _wobbleRoot.transform.position = new Vector3(0f, -2000f, 0f);
             var payload = new GameObject("Renderable");   // clip curves bind to this child name
             payload.transform.SetParent(_wobbleRoot.transform, false);
             _wobblePayload = payload.transform;
-            Dbg.Msg(System.ConsoleColor.Cyan, "[BuildingLaser] vanilla wobble rig ready");
+            Dbg.Msg(System.ConsoleColor.Cyan, "[MasonLine] vanilla wobble rig ready");
         }
-        catch (System.Exception e) { RLog.Warning($"[BuildingLaser] wobble rig init failed: {e.Message}"); }
+        catch (System.Exception e) { RLog.Warning($"[MasonLine] wobble rig init failed: {e.Message}"); }
     }
 
     /// <summary>Sample a wobble clip at 0..1 progress; false when the rig is unavailable.</summary>
@@ -404,7 +404,7 @@ internal static class LaserLine
             _pendingStake = null;
             _haveA = false;
             PlayCollectSound(_aimedPos);
-            RLog.Msg(System.ConsoleColor.Yellow, "[BuildingLaser] pending stake removed");
+            RLog.Msg(System.ConsoleColor.Yellow, "[MasonLine] pending stake removed");
             return;
         }
         if (_aimedLine == null) return;
@@ -413,7 +413,7 @@ internal static class LaserLine
         _aimedLine = null;
         LineTool.RefundKit();
         PlayCollectSound(_aimedPos);
-        RLog.Msg(System.ConsoleColor.Yellow, $"[BuildingLaser] line collected — {_lines.Count} still standing");
+        RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] line collected — {_lines.Count} still standing");
     }
 
     /// <summary>World unload/load: the lines are NOT part of the save and the stakes are DDoL — left
@@ -528,7 +528,7 @@ internal static class LaserLine
             }
             rend.sharedMaterial = m;
             _ghostVanillaMat = true;
-            Dbg.Msg($"[BuildingLaser] ghost adopted the vanilla ghost material: {m.name} ({m.shader?.name})");
+            Dbg.Msg($"[MasonLine] ghost adopted the vanilla ghost material: {m.name} ({m.shader?.name})");
         }
         catch { }
     }
@@ -619,7 +619,7 @@ internal static class LaserLine
 
         var mesh = BuildTube(path, RopeRadius, RopeSides, line.Dir);
 
-        var ropeGo = new GameObject("BuildingLaserRopeMesh");
+        var ropeGo = new GameObject("MasonLineRopeMesh");
         Object.DontDestroyOnLoad(ropeGo);
         ropeGo.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
         ropeGo.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
@@ -630,8 +630,8 @@ internal static class LaserLine
         if (rmat != null) rr.sharedMaterial = rmat;   // shared: no tinting anymore, no instance leak
         line.Rope = ropeGo;
 
-        line.KnotA = MakeKnot("BuildingLaserKnotA", tieA, line.Dir);
-        line.KnotB = MakeKnot("BuildingLaserKnotB", tieB, line.Dir);
+        line.KnotA = MakeKnot("MasonLineKnotA", tieA, line.Dir);
+        line.KnotB = MakeKnot("MasonLineKnotB", tieB, line.Dir);
     }
 
     /// <summary>Build one smooth tube mesh (world-space) following a path; smooth normals = no seams.</summary>
@@ -785,7 +785,7 @@ internal static class LaserLine
         var mesh = StakeMesh();
         if (mesh != null)
         {
-            _ghost = new GameObject("BuildingLaserGhost");
+            _ghost = new GameObject("MasonLineGhost");
             Object.DontDestroyOnLoad(_ghost);
             _ghost.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshFilter>());
             _ghost.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<MeshRenderer>());
@@ -796,7 +796,7 @@ internal static class LaserLine
             return;
         }
         _ghost = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        _ghost.name = "BuildingLaserGhost";
+        _ghost.name = "MasonLineGhost";
         Object.DontDestroyOnLoad(_ghost);
         var gcol = _ghost.GetComponent<Collider>();
         if (gcol != null) Object.Destroy(gcol);
@@ -818,7 +818,7 @@ internal static class LaserLine
             var rend = prefab?.GetComponentInChildren(Il2CppInterop.Runtime.Il2CppType.Of<Renderer>(), true)?.Cast<Renderer>();
             _woodMat = rend?.sharedMaterial;
         }
-        catch (System.Exception ex) { RLog.Warning($"[BuildingLaser] wood material fetch failed: {ex.Message}"); }
+        catch (System.Exception ex) { RLog.Warning($"[MasonLine] wood material fetch failed: {ex.Message}"); }
         return _woodMat;
     }
 
@@ -827,7 +827,7 @@ internal static class LaserLine
         if (_ropeMatTried) return _ropeMat;
         _ropeMatTried = true;
         _ropeMat = FindByName<Material>("RopeLogATileable");
-        if (_ropeMat == null) RLog.Warning("[BuildingLaser] RopeLogATileable not found");
+        if (_ropeMat == null) RLog.Warning("[MasonLine] RopeLogATileable not found");
         return _ropeMat;
     }
 
@@ -836,7 +836,7 @@ internal static class LaserLine
         if (_knotMeshTried) return _knotMesh;
         _knotMeshTried = true;
         _knotMesh = FindByName<Mesh>("RopeLogAKnotMeshLOD0");
-        if (_knotMesh == null) RLog.Warning("[BuildingLaser] knot mesh not found");
+        if (_knotMesh == null) RLog.Warning("[MasonLine] knot mesh not found");
         return _knotMesh;
     }
 
@@ -846,7 +846,7 @@ internal static class LaserLine
         if (_stakeMeshTried) return _stakeMesh;
         _stakeMeshTried = true;
         _stakeMesh = FindByName<Mesh>("BranchABMeshLOD0");
-        if (_stakeMesh == null) RLog.Warning("[BuildingLaser] BranchABMeshLOD0 not found — using cylinder fallback");
+        if (_stakeMesh == null) RLog.Warning("[MasonLine] BranchABMeshLOD0 not found — using cylinder fallback");
         return _stakeMesh;
     }
 
@@ -855,7 +855,7 @@ internal static class LaserLine
         if (_stakeMatTried) return _stakeMat;
         _stakeMatTried = true;
         _stakeMat = FindByName<Material>("BranchA");
-        if (_stakeMat == null) RLog.Warning("[BuildingLaser] BranchA material not found");
+        if (_stakeMat == null) RLog.Warning("[MasonLine] BranchA material not found");
         return _stakeMat;
     }
 

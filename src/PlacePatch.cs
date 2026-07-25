@@ -1,7 +1,7 @@
 using Construction;
 using HarmonyLib;
 
-namespace BuildingLaser;
+namespace MasonLine;
 
 /// <summary>
 /// The whole feature, in one postfix.

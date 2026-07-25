@@ -1,7 +1,7 @@
 using HarmonyLib;
 using Sons.Save;
 
-namespace BuildingLaser;
+namespace MasonLine;
 
 /// <summary>
 /// Kit-marker save-slot identity. SdkEvents.BeforeSaveLoading fires at the right moment but hides

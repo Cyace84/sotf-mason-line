@@ -1,10 +1,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/ToniMacaroni/RedLoader/main/MetadataSchema.json",
-  "id": "BuildingLaser",
+  "id": "MasonLine",
   "author": "cyace",
   "version": "1.0.0",
-  "description": "Craftable string line (stick + rope). Stretch it between two stakes — free logs snap to it for straight walls. Hold C on a stake to collect.",
+  "description": "Craftable string line (stick + rope). Stretch it between two stakes, free logs snap to it for straight walls. Hold C on a stake to collect.",
   "type": "Mod",
   "gameVersion": "2.0.0",
-  "url": "https://github.com/Cyace84/sotf-building-laser"
+  "url": "https://github.com/Cyace84/sotf-mason-line"
 }

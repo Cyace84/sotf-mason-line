@@ -2,10 +2,10 @@ using RedLoader;
 using SonsSdk;
 using UnityEngine;
 
-namespace BuildingLaser;
+namespace MasonLine;
 
 /// <summary>
-/// RedLoader mod entry. The tool is the craftable "Builder's String Line" (<see cref="LineTool"/>,
+/// RedLoader mod entry. The tool is the craftable "Mason Line" (<see cref="LineTool"/>,
 /// stick + rope); while it is equipped, LMB (or L) drops a guide point at the crosshair
 /// (1st = stake A, 2nd = stake B -> the string line runs A->B). Free log placement near the string
 /// snaps onto it; hold C on a stake to pull the line out (kit returns to the inventory).
@@ -33,7 +33,7 @@ public class LaserMod : SonsMod
         // save-time kit marker: SavePathPatch (Harmony on SaveGameManager.Save/Load) — the SDK event
         // hides the save dir, and that's the only reliable slot-id source for in-game saves
         RLog.Msg(System.ConsoleColor.Cyan,
-            "[BuildingLaser] initialized — craft the Builder's String Line (stick + rope), " +
+            "[MasonLine] initialized — craft the Mason Line (stick + rope), " +
             "hold it: LMB/L plants a stake, hold C on a stake to collect the line");
         // NOTE: do NOT verify here — RedLoader applies HarmonyPatchAll AFTER OnInitializeMod, so an
         // init-time GetPatchInfo reports a FALSE 'MISSING' (proven 2026-07-24: init said MISSING yet
@@ -67,7 +67,7 @@ public class LaserMod : SonsMod
         }
         catch (System.Exception e)
         {
-            RLog.Error($"[BuildingLaser][{marker}] guard verification threw: {e.GetType().Name}: {e.Message}");
+            RLog.Error($"[MasonLine][{marker}] guard verification threw: {e.GetType().Name}: {e.Message}");
         }
     }
 
@@ -75,17 +75,17 @@ public class LaserMod : SonsMod
     {
         if (target == null)
         {
-            RLog.Error($"[BuildingLaser][{marker}] {label}: target method NOT FOUND — guard is DEAD");
+            RLog.Error($"[MasonLine][{marker}] {label}: target method NOT FOUND — guard is DEAD");
             return;
         }
         var info = HarmonyLib.Harmony.GetPatchInfo(target);
         int prefixes = info?.Prefixes?.Count ?? 0;
         if (prefixes > 0)
             RLog.Msg(System.ConsoleColor.Green,
-                $"[BuildingLaser][{marker}] {label} detour VERIFIED: {prefixes} prefix on {target.Name}");
+                $"[MasonLine][{marker}] {label} detour VERIFIED: {prefixes} prefix on {target.Name}");
         else
             RLog.Error(
-                $"[BuildingLaser][{marker}] {label} detour MISSING (prefixes=0) on {target.Name} — HarmonyPatchAll did not take");
+                $"[MasonLine][{marker}] {label} detour MISSING (prefixes=0) on {target.Name} — HarmonyPatchAll did not take");
     }
 
     private const float CollectHoldSeconds = 0.4f;   // vanilla dismantle Hold(duration=0.4) — recon 2026-07-17
@@ -99,18 +99,20 @@ public class LaserMod : SonsMod
         // must not plant stakes
         bool gameplay = Cursor.lockState == CursorLockMode.Locked;
 
-        if (held && gameplay && (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.L)))
+        // place a stake = mouse click, like vanilla placement. No mod hotkey.
+        if (held && gameplay && Input.GetMouseButtonDown(0))
             LaserLine.DropPoint();
 
         // drive the inventory hover outline (axe-style highlight) from IsHighlighted
         LineTool.UpdateInventoryHover();
 
-        // C on a stake = HOLD-to-collect, vanilla loose-object dismantle feel (user 2026-07-16: only
-        // structures get the icon+gauge UI; a bed just SHAKES while you hold C — copy the bed). The
-        // stakes jitter while the hold accumulates; release early = nothing happens. J = instant clear.
+        // Aim at a stake + HOLD the vanilla Dismantle action (RU "Убрать", default C, REBINDABLE) to
+        // collect the line. No mod hotkey: we read the player's own binding via Sons.Input.InputSystem,
+        // so remapping Dismantle moves this too. The stakes jitter while the hold accumulates; release
+        // early = nothing happens. J = instant clear.
         bool aimingStake = gameplay && LaserLine.AimingAtStake();
-        if (aimingStake && Input.GetKeyDown(KeyCode.C)) LaserLine.Nudge();   // per-press kick, vanilla feel
-        if (aimingStake && Input.GetKey(KeyCode.C))
+        if (aimingStake && Sons.Input.InputSystem.GetButtonDown(Sons.Input.InputSystem.Actions.DismantleElement)) LaserLine.Nudge();   // per-press kick, vanilla feel
+        if (aimingStake && Sons.Input.InputSystem.GetButton(Sons.Input.InputSystem.Actions.DismantleElement))
         {
             _collectHold += Time.deltaTime;
             if (_collectHold >= CollectHoldSeconds)

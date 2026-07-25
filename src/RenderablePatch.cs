@@ -1,7 +1,7 @@
 using RedLoader;
 using UnityEngine;
 
-namespace BuildingLaser;
+namespace MasonLine;
 
 /// <summary>
 /// Kills the inventory heisen-crash (AV at UnityEvent`1.Invoke ← CustomItemRenderable.OnEnable;
@@ -40,17 +40,17 @@ internal static class RenderablePatch
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (m == null || _gameObjectField == null)
             {
-                RLog.Error("[BuildingLaser] OnEnable guard NOT installed — CustomItemRenderable members not found (SDK changed?)");
+                RLog.Error("[MasonLine] OnEnable guard NOT installed — CustomItemRenderable members not found (SDK changed?)");
                 return;
             }
             harmony.Patch(m, prefix: new HarmonyLib.HarmonyMethod(
                 typeof(RenderablePatch).GetMethod(nameof(Prefix),
                     System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)));
-            RLog.Msg(System.ConsoleColor.Cyan, "[BuildingLaser] OnEnable guard v2 installed (skip-Invoke for our item)");
+            RLog.Msg(System.ConsoleColor.Cyan, "[MasonLine] OnEnable guard v2 installed (skip-Invoke for our item)");
         }
         catch (System.Exception e)
         {
-            RLog.Error($"[BuildingLaser] OnEnable guard install failed: {e.Message}");
+            RLog.Error($"[MasonLine] OnEnable guard install failed: {e.Message}");
         }
     }
 
@@ -67,12 +67,12 @@ internal static class RenderablePatch
             var ar = __instance as Endnight.Rendering.AssetReferenceRenderable;
             if (ar != null && LineTool.SanitizeRenderable(ar))
                 Dbg.Msg(System.ConsoleColor.Cyan,
-                    $"[BuildingLaser] OnEnable guard: sanitized + muted Invoke for {go.name}");
+                    $"[MasonLine] OnEnable guard: sanitized + muted Invoke for {go.name}");
             return false;                                                        // skip original
         }
         catch (System.Exception e)
         {
-            RLog.Error($"[BuildingLaser] OnEnable guard threw ({e.GetType().Name}: {e.Message}) — running original");
+            RLog.Error($"[MasonLine] OnEnable guard threw ({e.GetType().Name}: {e.Message}) — running original");
             return true;
         }
     }
