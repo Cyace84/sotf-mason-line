@@ -18,9 +18,10 @@ Each crafted kit is one line. Craft more kits for more lines. They all work at t
 ## How it works
 
 Harmony postfix on `TargetInfo.CalcRelativePlacePosition` projects `PlacePosition` onto the
-nearest string line (within 2 m, between the stakes). That's the single field the build preview,
-validation, and final placement all read, so the ghost, the green/red check, and the placed log
-all move together. No grid, no custom buildable, no snap-node registration.
+nearest string line (within 2 m, between the stakes). The build preview reads that field. So does
+the green/red validation, and so does the log that finally drops, which is why they never disagree.
+There's no grid involved, and nothing registers a snap node. The stakes aren't custom buildables
+either.
 
 ## Install
 
@@ -43,8 +44,7 @@ git clone https://github.com/Cyace84/sotf-mason-line
 cd sotf-mason-line
 ```
 
-`lib/` holds the compile-time references and is not in the repo. RedLoader generates them into
-your game folder the first time it runs, so install RedLoader and launch the game once, then:
+`lib/` holds the compile-time references and is not in the repo. RedLoader generates them into your game folder the first time it runs, so install RedLoader and launch the game once, then:
 
 ```
 GAME="/path/to/steamapps/common/Sons Of The Forest"
@@ -54,8 +54,7 @@ cp "$GAME"/_RedLoader/net6/*.dll lib/    # RedLoader, SonsSdk, Il2CppInterop, 0H
 rm -f lib/dobby.dll lib/Splash.dll       # native, not referenceable
 ```
 
-The csproj references every DLL in that folder and copies none of them into the build. If you
-keep several SOTF mods around, one shared `lib/` symlinked into each repo also works.
+The csproj references every DLL in that folder and copies none of them into the build. If you keep several SOTF mods around, one shared `lib/` symlinked into each repo also works.
 
 ```
 dotnet build        # produces bin/MasonLine.dll
@@ -64,10 +63,8 @@ dotnet build        # produces bin/MasonLine.dll
 
 ## Notes
 
-- **Tested in singleplayer.** Multiplayer is untested — reports welcome.
-- Carries three crash guards, two of them game-wide: one skips a vanilla impact sound when the
-  collider would crash `Physics.ClosestPoint`, one intercepts a renderable callback that faults on
-  managed-injected items, and one applies only to this mod's own item.
+- **Tested in singleplayer.** Multiplayer is untested. Reports welcome.
+- Ships three crash guards. Two are game-wide: one skips a vanilla impact sound when the collider would crash `Physics.ClosestPoint`, the other intercepts a renderable callback that faults on managed-injected items. The third only ever touches this mod's own item.
 
 ## License
 

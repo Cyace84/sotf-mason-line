@@ -75,7 +75,7 @@ public class MasonLineMod : SonsMod
     {
         if (target == null)
         {
-            RLog.Error($"[MasonLine][{marker}] {label}: target method NOT FOUND — guard is DEAD");
+            RLog.Error($"[MasonLine][{marker}] {label}: target method NOT FOUND, guard is DEAD");
             return;
         }
         var info = HarmonyLib.Harmony.GetPatchInfo(target);

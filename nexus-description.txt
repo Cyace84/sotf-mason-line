@@ -6,12 +6,12 @@ You place the first log by hand and start stacking toward wherever you're headed
 
 I did that three times against the same rock before I gave up and made this.
 
-Mason Line is a stake-and-rope kit you craft on the bench. Plant a stake where the wall starts, plant another where it ends, and a cord pulls tight between them. Any log you set down near the cord snaps onto it, so the wall runs from the first stake to the second. The string holds the line instead of your wrist. When you're done, hold C on a stake and the whole kit goes back in your pack.
+Mason Line is a stake-and-rope kit you craft on the bench. Plant a stake where the wall starts, plant another where it ends, and a cord pulls tight between them. Any log you set down near the cord snaps onto it, so the wall runs from the first stake to the second. The string holds the line instead of your wrist. When you're done, hold Dismantle on a stake and the whole kit goes back in your pack.
 
 [size=4][b]Controls[/b][/size]
 [list]
-[*]Left-click while holding the item — plant a stake at the crosshair. First click = stake A, second = stake B, string runs between them.
-[*]Hold Dismantle while looking at a stake — collect the line. Kit returns to inventory. That's the vanilla action under Construction in the controls menu, bound to C by default.
+[*]Left-click while holding the item plants a stake at the crosshair. First click = stake A, second = stake B, string runs between them.
+[*]Hold Dismantle while looking at a stake to collect the line. Kit returns to inventory. That's the vanilla action under Construction in the controls menu, bound to C by default.
 [/list]
 No custom keybinds. The mod adds no hotkeys of its own and reads your existing bindings: left-click places, the Dismantle action collects. Rebind Dismantle and this follows it.
 
@@ -19,9 +19,9 @@ No custom keybinds. The mod adds no hotkeys of its own and reads your existing b
 Each crafted kit is one line. Craft more for parallel lines, corners, whatever layout you need. They all snap at the same time. The log goes to whichever string is closest.
 
 [size=4][b]What it does under the hood[/b][/size]
-One Harmony postfix on [font=Courier New]TargetInfo.CalcRelativePlacePosition[/font]. When a free log's placement lands within 2 meters of a string and between the two stakes, its position and axis get projected onto the line. The build preview, the green/red validation, and the final placed log all read the same field, so they all move together. No grid, no custom buildable, no snap-node registration.
+One Harmony postfix on [font=Courier New]TargetInfo.CalcRelativePlacePosition[/font]. When a free log's placement lands within 2 meters of a string and between the two stakes, its position and axis get projected onto the line. The build preview reads that field. So does the green/red validation, and so does the log that finally drops, which is why they never disagree. There's no grid involved, and nothing registers a snap node.
 
-The mod also patches [font=Courier New]ObjectPhysicsInteractionSfx.TryTriggerHardSurfaceImpact[/font] — a crash guard for a vanilla bug where [font=Courier New]Physics.ClosestPoint[/font] hits a non-convex mesh collider in the backpack physics callback and kills the process. That patch is game-wide, not specific to the string line.
+The mod also patches [font=Courier New]ObjectPhysicsInteractionSfx.TryTriggerHardSurfaceImpact[/font] as a crash guard for a vanilla bug where [font=Courier New]Physics.ClosestPoint[/font] hits a non-convex mesh collider in the backpack physics callback and kills the process. That patch is game-wide, not specific to the string line.
 
 [size=4][b]Install[/b][/size]
 [list=1]

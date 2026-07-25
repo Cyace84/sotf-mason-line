@@ -120,7 +120,7 @@ internal static class GuideLine
     {
         if (!_haveA && !LineTool.HasKit())
         {
-            RLog.Warning("[MasonLine] no string line kit in the inventory — craft another (stick + rope)");
+            RLog.Warning("[MasonLine] no string line kit in the inventory. Craft another (stick + rope)");
             return;
         }
         if (!TryAimPoint(out var p))
@@ -136,14 +136,14 @@ internal static class GuideLine
             _pendingStake = CreateStake("MasonLineStakeA");
             PlaceStake(_pendingStake, p);
             PlayPlaceSound(p);
-            RLog.Msg(System.ConsoleColor.Green, "[MasonLine] stake A planted — aim the far end and click again");
+            RLog.Msg(System.ConsoleColor.Green, "[MasonLine] stake A planted. Aim the far end and click again");
             return;
         }
 
         var dir = p - _pointA; dir.y = 0f;
         if (dir.sqrMagnitude < 1e-4f)
         {
-            RLog.Warning("[MasonLine] second point too close — aim further along the wall");
+            RLog.Warning("[MasonLine] second point too close, aim further along the wall");
             return;
         }
 
@@ -165,7 +165,7 @@ internal static class GuideLine
         BuildRope(line);
         _lines.Add(line);
         LineTool.ConsumeKit();   // kit economy: the placed line IS the kit — it leaves the inventory
-        RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] string line #{_lines.Count} set, {line.SegLen:0.0}m — logs placed near it snap on (hold Dismantle on a stake to collect)");
+        RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] string line #{_lines.Count} set, {line.SegLen:0.0}m. Logs placed near it snap on (hold Dismantle on a stake to collect)");
     }
 
     /// <summary>Is the crosshair pointing at one of the planted stakes? Vanilla-style: the game
@@ -267,7 +267,7 @@ internal static class GuideLine
                 if (c.name == "PreviewAnim -  Wobble") _wobbleClip = c;
                 else if (c.name == "PreviewAnim -  WobbleExtraLite") _nudgeClip = c;
             }
-            if (_wobbleClip == null) { RLog.Warning("[MasonLine] vanilla Wobble clip not loaded — using soft fallback shake"); return; }
+            if (_wobbleClip == null) { RLog.Warning("[MasonLine] vanilla Wobble clip not loaded, using soft fallback shake"); return; }
             if (_nudgeClip == null) _nudgeClip = _wobbleClip;
 
             _wobbleRoot = new GameObject("MasonLineWobbleProxy");
@@ -413,7 +413,7 @@ internal static class GuideLine
         _aimedLine = null;
         LineTool.RefundKit();
         PlayCollectSound(_aimedPos);
-        RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] line collected — {_lines.Count} still standing");
+        RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] line collected, {_lines.Count} still standing");
     }
 
     /// <summary>World unload/load: the lines are NOT part of the save and the stakes are DDoL — left
@@ -846,7 +846,7 @@ internal static class GuideLine
         if (_stakeMeshTried) return _stakeMesh;
         _stakeMeshTried = true;
         _stakeMesh = FindByName<Mesh>("BranchABMeshLOD0");
-        if (_stakeMesh == null) RLog.Warning("[MasonLine] BranchABMeshLOD0 not found — using cylinder fallback");
+        if (_stakeMesh == null) RLog.Warning("[MasonLine] BranchABMeshLOD0 not found, falling back to a cylinder");
         return _stakeMesh;
     }
 

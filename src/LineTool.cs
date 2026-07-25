@@ -202,9 +202,9 @@ internal static class LineTool
             if (inv.RemoveItem(ItemId, 1, false, true, true, null, true))
             {
                 _kitsOut++;
-                RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] kit staked out ({_kitsOut} in the field) — collect the line (hold Dismantle) to get it back");
+                RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] kit staked out ({_kitsOut} in the field). Collect the line (hold Dismantle) to get it back");
             }
-            else RLog.Warning("[MasonLine] kit consume failed (RemoveItem=false) — line placed anyway");
+            else RLog.Warning("[MasonLine] kit consume failed (RemoveItem=false), line placed anyway");
         }
         catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit consume failed: {ex.Message}"); }
     }
@@ -223,7 +223,7 @@ internal static class LineTool
                 FixRenderableLoadedFlags();   // re-add touches the layout item; make sure its renderable is safe
                 RLog.Msg(System.ConsoleColor.Green, "[MasonLine] kit returned to the inventory");
             }
-            else RLog.Warning("[MasonLine] kit refund failed (AddItem=false) — count kept, the save-time marker will restore it");
+            else RLog.Warning("[MasonLine] kit refund failed (AddItem=false): count kept, the save-time marker will restore it");
         }
         catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit refund failed: {ex.Message}"); }
     }
@@ -263,7 +263,7 @@ internal static class LineTool
             int given = 0;
             for (int i = 0; i < n; i++) if (inv.AddItem(ItemId)) given++;
             if (given > 0)
-                RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] {given} kit(s) were staked out when this save was made — returned");
+                RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] {given} kit(s) were staked out when this save was made, and they are back in your pack");
         }
         catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit marker restore failed: {ex.Message}"); }
     }
@@ -284,12 +284,12 @@ internal static class LineTool
             if (ItemTools.IsItemRegistered(ItemId)) return;
             if (ItemDatabaseManager._itemsCache == null || ItemDatabaseManager._instance == null)
             {
-                RLog.Msg($"[MasonLine] item DB not ready at {context} — deferring registration");
+                RLog.Msg($"[MasonLine] item DB not ready at {context}, deferring registration");
                 return;
             }
             if (!ItemDatabaseManager.TryFindItemById(TemplateItemId, out var tpl) || tpl == null)
             {
-                RLog.Msg($"[MasonLine] template item {TemplateItemId} not in DB at {context} — deferring registration");
+                RLog.Msg($"[MasonLine] template item {TemplateItemId} not in DB at {context}; registration deferred");
                 return;
             }
             RegisterItemOnce();
@@ -298,7 +298,7 @@ internal static class LineTool
         }
         catch (System.Exception ex)
         {
-            RLog.Warning($"[MasonLine] early item registration failed at {context}: {ex.Message} — spawn-time fallback stays");
+            RLog.Warning($"[MasonLine] early item registration failed at {context}: {ex.Message}. Spawn-time fallback stays");
         }
     }
 

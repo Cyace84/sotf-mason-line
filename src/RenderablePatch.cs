@@ -40,7 +40,7 @@ internal static class RenderablePatch
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             if (m == null || _gameObjectField == null)
             {
-                RLog.Error("[MasonLine] OnEnable guard NOT installed — CustomItemRenderable members not found (SDK changed?)");
+                RLog.Error("[MasonLine] OnEnable guard NOT installed: CustomItemRenderable members not found (SDK changed?)");
                 return;
             }
             harmony.Patch(m, prefix: new HarmonyLib.HarmonyMethod(
@@ -72,7 +72,7 @@ internal static class RenderablePatch
         }
         catch (System.Exception e)
         {
-            RLog.Error($"[MasonLine] OnEnable guard threw ({e.GetType().Name}: {e.Message}) — running original");
+            RLog.Error($"[MasonLine] OnEnable guard threw ({e.GetType().Name}: {e.Message}), running original");
             return true;
         }
     }
