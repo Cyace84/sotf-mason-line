@@ -11,9 +11,9 @@ Mason Line is a stake-and-rope kit you craft on the bench. Plant a stake where t
 [size=4][b]Controls[/b][/size]
 [list]
 [*]Left-click while holding the item — plant a stake at the crosshair. First click = stake A, second = stake B, string runs between them.
-[*]Hold your Dismantle key (default C) while looking at a stake — collect the line. Kit returns to inventory.
+[*]Hold Dismantle while looking at a stake — collect the line. Kit returns to inventory. That's the vanilla action under Construction in the controls menu, bound to C by default.
 [/list]
-No custom keybinds. The mod reads your own vanilla bindings: left-click places, the Dismantle action collects. Rebind Dismantle in the controls menu and this follows.
+No custom keybinds. The mod adds no hotkeys of its own and reads your existing bindings: left-click places, the Dismantle action collects. Rebind Dismantle and this follows it.
 
 [size=4][b]Multiple lines[/b][/size]
 Each crafted kit is one line. Craft more for parallel lines, corners, whatever layout you need. They all snap at the same time. The log goes to whichever string is closest.
