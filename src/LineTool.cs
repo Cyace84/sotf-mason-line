@@ -15,7 +15,7 @@ namespace MasonLine;
 /// RightHand slot + sane held anim vars. The held visual is a GPS held-prefab clone with the GPS
 /// behaviours stripped and a stake+knot model in their place; the game instantiates it into the
 /// held locator itself (SetupHeld doc: "HeldPrefab ... will be instantiated into the locator").
-/// While the tool is equipped, LaserMod enables the ghost preview + point placement.
+/// While the tool is equipped, MasonLineMod enables the ghost preview + point placement.
 /// </summary>
 internal static class LineTool
 {
@@ -526,7 +526,7 @@ internal static class LineTool
         }
     }
 
-    /// <summary>Per-frame (from LaserMod.Tick): outline = IsHighlighted, giving the vanilla axe-style
+    /// <summary>Per-frame (from MasonLineMod.Tick): outline = IsHighlighted, giving the vanilla axe-style
     /// hover highlight. Lazily wires the visual the first time the inventory is opened, because the SDK's
     /// CustomItemRenderable doesn't instantiate our model until the (inactive) inventory group first
     /// activates. Sets the Inventory layer (23) so InventoryCamera can see the branch at all.</summary>

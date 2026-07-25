@@ -13,9 +13,9 @@ namespace MasonLine;
 /// initialize, the hotkeys work ungated (dev fallback). The actual snap is the Harmony postfix in
 /// <see cref="PlacePatch"/>.
 /// </summary>
-public class LaserMod : SonsMod
+public class MasonLineMod : SonsMod
 {
-    public LaserMod()
+    public MasonLineMod()
     {
         HarmonyPatchAll = true;       // installs PlacePatch
         OnUpdateCallback = Tick;
