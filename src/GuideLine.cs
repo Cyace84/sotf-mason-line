@@ -15,7 +15,7 @@ namespace MasonLine;
 /// plus a rope-knot mesh at each stake. While snap is on, the build-ghost placement position is projected
 /// onto this line (see <see cref="PlacePatch"/>), so a freely-placed log lays exactly along it.
 /// </summary>
-internal static class MasonLine
+internal static class GuideLine
 {
     /// <summary>One placed string line: geometry + its own world visuals. Kit economy: 1 kit =
     /// 1 line, so several crafted kits = several simultaneous lines (user bug 2026-07-17: the old
@@ -136,7 +136,7 @@ internal static class MasonLine
             _pendingStake = CreateStake("MasonLineStakeA");
             PlaceStake(_pendingStake, p);
             PlayPlaceSound(p);
-            RLog.Msg(System.ConsoleColor.Green, "[MasonLine] stake A planted — aim the far end and press L again");
+            RLog.Msg(System.ConsoleColor.Green, "[MasonLine] stake A planted — aim the far end and click again");
             return;
         }
 
@@ -165,7 +165,7 @@ internal static class MasonLine
         BuildRope(line);
         _lines.Add(line);
         LineTool.ConsumeKit();   // kit economy: the placed line IS the kit — it leaves the inventory
-        RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] string line #{_lines.Count} set, {line.SegLen:0.0}m — logs placed near it snap on (hold C on a stake to collect)");
+        RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] string line #{_lines.Count} set, {line.SegLen:0.0}m — logs placed near it snap on (hold Dismantle on a stake to collect)");
     }
 
     /// <summary>Is the crosshair pointing at one of the planted stakes? Vanilla-style: the game

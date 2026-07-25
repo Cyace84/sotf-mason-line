@@ -8,9 +8,9 @@ namespace MasonLine;
 /// RedLoader mod entry. The tool is the craftable "Mason Line" (<see cref="LineTool"/>,
 /// stick + rope); while it is equipped, LMB (or L) drops a guide point at the crosshair
 /// (1st = stake A, 2nd = stake B -> the string line runs A->B). Free log placement near the string
-/// snaps onto it; hold C on a stake to pull the line out (kit returns to the inventory).
+/// snaps onto it; hold Dismantle on a stake to pull the line out (kit returns to the inventory).
 /// A translucent ghost stake previews where the point will land. If the item pipeline failed to
-/// initialize, the hotkeys work ungated (dev fallback). The actual snap is the Harmony postfix in
+/// initialize, placement works ungated (dev fallback). The actual snap is the Harmony postfix in
 /// <see cref="PlacePatch"/>.
 /// </summary>
 public class MasonLineMod : SonsMod
@@ -34,7 +34,7 @@ public class MasonLineMod : SonsMod
         // hides the save dir, and that's the only reliable slot-id source for in-game saves
         RLog.Msg(System.ConsoleColor.Cyan,
             "[MasonLine] initialized — craft the Mason Line (stick + rope), " +
-            "hold it: LMB/L plants a stake, hold C on a stake to collect the line");
+            "hold it: LMB/L plants a stake, hold Dismantle on a stake to collect the line");
         // NOTE: do NOT verify here — RedLoader applies HarmonyPatchAll AFTER OnInitializeMod, so an
         // init-time GetPatchInfo reports a FALSE 'MISSING' (proven 2026-07-24: init said MISSING yet
         // the guard fired skips later same session). Verify on the first Tick instead.
@@ -101,7 +101,7 @@ public class MasonLineMod : SonsMod
 
         // place a stake = mouse click, like vanilla placement. No mod hotkey.
         if (held && gameplay && Input.GetMouseButtonDown(0))
-            MasonLine.DropPoint();
+            GuideLine.DropPoint();
 
         // drive the inventory hover outline (axe-style highlight) from IsHighlighted
         LineTool.UpdateInventoryHover();
@@ -110,22 +110,22 @@ public class MasonLineMod : SonsMod
         // collect the line. No mod hotkey: we read the player's own binding via Sons.Input.InputSystem,
         // so remapping Dismantle moves this too. The stakes jitter while the hold accumulates; release
         // early = nothing happens. J = instant clear.
-        bool aimingStake = gameplay && MasonLine.AimingAtStake();
-        if (aimingStake && Sons.Input.InputSystem.GetButtonDown(Sons.Input.InputSystem.Actions.DismantleElement)) MasonLine.Nudge();   // per-press kick, vanilla feel
+        bool aimingStake = gameplay && GuideLine.AimingAtStake();
+        if (aimingStake && Sons.Input.InputSystem.GetButtonDown(Sons.Input.InputSystem.Actions.DismantleElement)) GuideLine.Nudge();   // per-press kick, vanilla feel
         if (aimingStake && Sons.Input.InputSystem.GetButton(Sons.Input.InputSystem.Actions.DismantleElement))
         {
             _collectHold += Time.deltaTime;
             if (_collectHold >= CollectHoldSeconds)
             {
                 _collectHold = 0f;
-                MasonLine.EndShake();
-                MasonLine.CollectAimed();   // pulls out only the AIMED line; J still clears everything
+                GuideLine.EndShake();
+                GuideLine.CollectAimed();   // pulls out only the AIMED line; J still clears everything
             }
-            else if (_collectHold > 0.12f) MasonLine.Shake(_collectHold);    // brief grace = tap stays a nudge
+            else if (_collectHold > 0.12f) GuideLine.Shake(_collectHold);    // brief grace = tap stays a nudge
         }
-        else if (_collectHold > 0f) { _collectHold = 0f; MasonLine.EndShake(); }
-        MasonLine.UpdateNudge();
+        else if (_collectHold > 0f) { _collectHold = 0f; GuideLine.EndShake(); }
+        GuideLine.UpdateNudge();
 
-        MasonLine.UpdateGhost(held && gameplay);
+        GuideLine.UpdateGhost(held && gameplay);
     }
 }

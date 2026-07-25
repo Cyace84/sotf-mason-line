@@ -65,10 +65,9 @@ dotnet build        # produces bin/MasonLine.dll
 ## Notes
 
 - **Tested in singleplayer.** Multiplayer is untested — reports welcome.
-- No custom keybinds. The mod adds no hotkeys of its own and reads your existing bindings: left-click
-  places a stake, the Dismantle action collects the line. Rebind Dismantle and the mod follows it.
-- Includes a crash guard for a vanilla bug (ClosestPoint on non-convex MeshColliders in the
-  backpack physics callback). This patch is game-wide, not specific to the string line.
+- Carries three crash guards, two of them game-wide: one skips a vanilla impact sound when the
+  collider would crash `Physics.ClosestPoint`, one intercepts a renderable callback that faults on
+  managed-injected items, and one applies only to this mod's own item.
 
 ## License
 

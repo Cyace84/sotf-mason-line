@@ -25,7 +25,7 @@ internal static class LineTool
     private const int RopeId = 403;
 
     /// <summary>True once the item pipeline initialized for this world. While false the mod
-    /// falls back to ungated hotkeys, so a broken item setup never bricks the core feature.</summary>
+    /// falls back to ungated placement, so a broken item setup never bricks the core feature.</summary>
     public static bool Ready;
     private static bool _setupFailed;   // TRUE only after a THROWN Setup — gates the dev fallback
 
@@ -78,7 +78,7 @@ internal static class LineTool
     {
         try
         {
-            MasonLine.ResetWorld();   // belt-and-braces: OnWorldExited may not fire on every load path
+            GuideLine.ResetWorld();   // belt-and-braces: OnWorldExited may not fire on every load path
             RegisterItemOnce();
 
             var data = ItemDatabaseManager.ItemById(ItemId);
@@ -99,20 +99,20 @@ internal static class LineTool
             Ready = true;
             RestoreKitsFromMarker();
             RLog.Msg(System.ConsoleColor.Cyan,
-                "[MasonLine] Builder's Line ready — craft: 1 stick + 1 rope, equip it to place the line");
+                "[MasonLine] Mason Line ready — craft: 1 stick + 1 rope, equip it to place the line");
         }
         catch (System.Exception ex)
         {
             Ready = false;
             _setupFailed = true;
-            RLog.Error($"[MasonLine] item setup failed (hotkeys stay ungated): {ex}");
+            RLog.Error($"[MasonLine] item setup failed (placement stays ungated): {ex}");
         }
     }
 
     // ---- kit economy (user-approved design 2026-07-16): one craft = one kit = one active line,
     // unlimited length, NO ingredient burn. Physicality: while the line stands in the world the kit
     // is OUT of the inventory (RemoveItem instantDestroy:true — the same flag the game itself uses
-    // for placement-consume, memento-mori flag telemetry); collecting (C) / clearing (J) returns it.
+    // for placement-consume, memento-mori flag telemetry); collecting the line (hold Dismantle) returns it.
     // A marker file survives a game restart so a saved-with-line-out inventory gets the kit back
     // (the line itself is not in the save). Signatures observed: PlayerInventory.AddItem/RemoveItem/
     // AmountOf decompile 2026-07-16.
@@ -124,7 +124,7 @@ internal static class LineTool
     /// into the next world — DDoL carried them across reloads => user-repro'd kit dupe 2026-07-17.</summary>
     public static void OnWorldExited()
     {
-        MasonLine.ResetWorld();
+        GuideLine.ResetWorld();
         _kitsOut = 0;
         // per-world pipeline state: without this, menu-time Ticks kept scanning dead scene objects
         // (Ready stayed true) and the doc on Ready ("for this world") was a lie (2026-07-22 review)
@@ -202,7 +202,7 @@ internal static class LineTool
             if (inv.RemoveItem(ItemId, 1, false, true, true, null, true))
             {
                 _kitsOut++;
-                RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] kit staked out ({_kitsOut} in the field) — collect the line (C) to get it back");
+                RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] kit staked out ({_kitsOut} in the field) — collect the line (hold Dismantle) to get it back");
             }
             else RLog.Warning("[MasonLine] kit consume failed (RemoveItem=false) — line placed anyway");
         }
@@ -271,7 +271,7 @@ internal static class LineTool
     /// <summary>Register the ItemData BEFORE the save deserializes. ROOT CAUSE (2026-07-22, user
     /// lost a saved kit): inventory deserialization runs during world load, but RegisterItemOnce
     /// used to run only at OnAfterSpawn (Latest.log 2026-07-22: "DESERIALIZING" 05:24:22 vs
-    /// "Builder's Line ready" 05:24:27) — an ItemId the database doesn't know at deserialize time
+    /// "Mason Line ready" 05:24:27) — an ItemId the database doesn't know at deserialize time
     /// is silently DROPPED from the loaded inventory (save file had ItemBlock 9417, in-game
     /// inventory came up without it, zero kit log lines). In-process world reloads were immune
     /// (ItemData already registered from the first spawn), only a COLD game start lost the kit.
@@ -460,8 +460,8 @@ internal static class LineTool
         // Inventory layer (23) — done post-spawn in TryWireInventoryHover; InventoryCamera cullingMask
         // excludes layer 0, which is why any mesh here looked "invisible" before. Held-in-hand keeps the
         // procedural cylinder (its orientation was tuned separately).
-        var branchMesh = matDisplay ? MasonLine.StakeMesh() : null;
-        var branchMat = matDisplay ? MasonLine.StakeMat() : null;
+        var branchMesh = matDisplay ? GuideLine.StakeMesh() : null;
+        var branchMat = matDisplay ? GuideLine.StakeMat() : null;
         if (branchMesh != null)
         {
             var stake = new GameObject("Stake");
@@ -506,13 +506,13 @@ internal static class LineTool
             stake.transform.SetParent(host, false);
             stake.transform.localScale = new Vector3(0.045f, 0.22f, 0.045f);   // 44cm long stake
             stake.transform.localPosition = Vector3.zero;
-            var wood = MasonLine.WoodMat();
+            var wood = GuideLine.WoodMat();
             var sr = stake.GetComponent<Renderer>();
             if (wood != null && sr != null) sr.sharedMaterial = wood;
         }
 
-        var knotMesh = MasonLine.KnotMesh();
-        var ropeMat = MasonLine.RopeMaterial();
+        var knotMesh = GuideLine.KnotMesh();
+        var ropeMat = GuideLine.RopeMaterial();
         if (knotMesh != null)
         {
             var knot = new GameObject("Knot");
