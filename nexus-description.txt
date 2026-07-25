@@ -1,40 +1,38 @@
 [size=5][b]Mason Line[/b][/size]
 
-Sons of the Forest builds you a perfectly straight wall. That's the problem.
+A stake-and-rope guide line you craft from 1 stick and 1 rope. Plant a stake where a wall should start, plant another where it should end, and a cord pulls tight between them. Any log you set down within 2 meters of the cord snaps onto it, so the wall runs stake to stake instead of wherever the first log happened to point.
 
-You place the first log by hand and start stacking toward wherever you're headed: a rock, a corner, the edge of your base. Every log after the first snaps cleanly to the one before it, so the wall comes out dead straight. But that first log set the direction, and if it went down a degree or two off, straight is the last thing you want. Ten logs later the wall is level, solid, and arriving half a meter to the left of where you aimed. There's no nudging the angle back. You tear it down and try to eyeball the first log a little better.
+That last part is the actual problem. Sons of the Forest stacks logs perfectly: every log after the first snaps onto the one before it. But the direction comes from the first log, dropped by hand with nothing to line it up against. A degree off there and ten logs later the wall is level, solid, and half a meter to the left of the rock you were building toward. The angle cannot be nudged afterwards. You tear it down and try to eyeball it better.
 
-I did that three times against the same rock before I gave up and made this.
-
-Mason Line is a stake-and-rope kit you craft on the bench. Plant a stake where the wall starts, plant another where it ends, and a cord pulls tight between them. Any log you set down near the cord snaps onto it, so the wall runs from the first stake to the second. The string holds the line instead of your wrist. When you're done, hold Dismantle on a stake and the whole kit goes back in your pack.
+The sane fix is to place that first log more carefully. I wrote a Harmony patch instead. Most of my mods are this size.
 
 [size=4][b]Controls[/b][/size]
 [list]
-[*]Left-click while holding the item plants a stake at the crosshair. First click = stake A, second = stake B, string runs between them.
-[*]Hold Dismantle while looking at a stake to collect the line. Kit returns to inventory. That's the vanilla action under Construction in the controls menu, bound to C by default.
+[*]Left-click while holding the Mason Line plants a stake at the crosshair. First click = stake A, second = stake B, cord runs between them.
+[*]Hold Dismantle while looking at a stake to collect the line. The kit returns to your inventory. That is the vanilla action under Construction in the controls menu, bound to C by default.
 [/list]
 No custom keybinds. The mod adds no hotkeys of its own and reads your existing bindings: left-click places, the Dismantle action collects. Rebind Dismantle and this follows it.
 
 [size=4][b]Multiple lines[/b][/size]
-Each crafted kit is one line. Craft more for parallel lines, corners, whatever layout you need. They all snap at the same time. The log goes to whichever string is closest.
+Each crafted kit is one line. Craft more for parallel lines or corners. They all snap at the same time, and a log goes to whichever cord is closest.
 
 [size=4][b]What it does under the hood[/b][/size]
-One Harmony postfix on [font=Courier New]TargetInfo.CalcRelativePlacePosition[/font]. When a free log's placement lands within 2 meters of a string and between the two stakes, its position and axis get projected onto the line. The build preview reads that field. So does the green/red validation, and so does the log that finally drops, which is why they never disagree. There's no grid involved, and nothing registers a snap node.
+One Harmony postfix on [font=Courier New]TargetInfo.CalcRelativePlacePosition[/font]. When a free log's placement lands within 2 meters of a cord and between the two stakes, its position and axis get projected onto the line. The build preview, the green/red validation and the log that finally drops all read that one field. There is no grid involved, and nothing registers a snap node.
 
-The mod also patches [font=Courier New]ObjectPhysicsInteractionSfx.TryTriggerHardSurfaceImpact[/font] as a crash guard for a vanilla bug where [font=Courier New]Physics.ClosestPoint[/font] hits a non-convex mesh collider in the backpack physics callback and kills the process. That patch is game-wide, not specific to the string line.
+The mod also patches [font=Courier New]ObjectPhysicsInteractionSfx.TryTriggerHardSurfaceImpact[/font] as a crash guard for a vanilla bug where [font=Courier New]Physics.ClosestPoint[/font] hits a non-convex mesh collider in the backpack physics callback and kills the process. That patch is game-wide, not specific to the guide line.
 
 [size=4][b]Install[/b][/size]
 [list=1]
 [*]Install [url=https://github.com/ToniMacaroni/RedLoader]RedLoader[/url] and run the game once.
-[*]Drop [font=Courier New]MasonLine.dll[/font] into the game's [font=Courier New]Mods/[/font] folder.
-[*]Start the game. The crafting recipe appears automatically.
+[*]Unpack the archive into the game's [font=Courier New]Mods/[/font] folder. You should end up with [font=Courier New]Mods/MasonLine.dll[/font] and a [font=Courier New]Mods/MasonLine/[/font] folder holding the manifest.
+[*]Start the game. The recipe shows up on the crafting mat as Mason Line.
 [/list]
 
 [size=4][b]Notes[/b][/size]
 [list]
 [*]Tested in singleplayer. Multiplayer is untested. Reports welcome.
-[*]The string is a visual guide, not a physical object. NPCs and the player walk through it.
-[*]Saving and loading preserves your kit inventory. Lines on the ground are session-only. Pull them out and re-stretch after loading if you need them again.
+[*]The cord is a visual guide, not a physical object. NPCs and the player walk through it.
+[*]Saving and loading preserves your kit inventory. Lines already stretched on the ground are session-only. Collect them and re-stretch after loading.
 [/list]
 
 [size=4][b]Bug reports[/b][/size]

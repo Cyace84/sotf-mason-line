@@ -99,7 +99,7 @@ internal static class LineTool
             Ready = true;
             RestoreKitsFromMarker();
             RLog.Msg(System.ConsoleColor.Cyan,
-                "[MasonLine] Mason Line ready — craft: 1 stick + 1 rope, equip it to place the line");
+                "[MasonLine] Mason Line ready, craft: 1 stick + 1 rope, equip it to place the line");
         }
         catch (System.Exception ex)
         {
@@ -294,7 +294,7 @@ internal static class LineTool
             }
             RegisterItemOnce();
             RLog.Msg(System.ConsoleColor.Cyan,
-                $"[MasonLine] item {ItemId} registered early ({context}) — saved kits survive a cold start");
+                $"[MasonLine] item {ItemId} registered early ({context}): saved kits survive a cold start");
         }
         catch (System.Exception ex)
         {

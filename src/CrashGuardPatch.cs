@@ -71,7 +71,7 @@ internal static class HardSurfaceImpactCrashGuard
             {
                 if (_skipped < 8)
                     Dbg.Msg(System.ConsoleColor.DarkYellow,
-                        $"[MasonLine] crash-guard: skipped SFX on MeshCollider '{impactCollider.name}' (convex={mesh.convex}, verts={vcount}) — not provably ClosestPoint-safe #{_skipped + 1}");
+                        $"[MasonLine] crash-guard: skipped SFX on MeshCollider '{impactCollider.name}' (convex={mesh.convex}, verts={vcount}). Not provably ClosestPoint-safe #{_skipped + 1}");
                 _skipped++;
                 return false;
             }

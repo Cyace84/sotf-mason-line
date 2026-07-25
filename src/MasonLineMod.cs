@@ -33,7 +33,7 @@ public class MasonLineMod : SonsMod
         // save-time kit marker: SavePathPatch (Harmony on SaveGameManager.Save/Load) — the SDK event
         // hides the save dir, and that's the only reliable slot-id source for in-game saves
         RLog.Msg(System.ConsoleColor.Cyan,
-            "[MasonLine] initialized — craft the Mason Line (stick + rope), " +
+            "[MasonLine] initialized. Craft the Mason Line (stick + rope), " +
             "hold it: LMB/L plants a stake, hold Dismantle on a stake to collect the line");
         // NOTE: do NOT verify here — RedLoader applies HarmonyPatchAll AFTER OnInitializeMod, so an
         // init-time GetPatchInfo reports a FALSE 'MISSING' (proven 2026-07-24: init said MISSING yet
@@ -85,7 +85,7 @@ public class MasonLineMod : SonsMod
                 $"[MasonLine][{marker}] {label} detour VERIFIED: {prefixes} prefix on {target.Name}");
         else
             RLog.Error(
-                $"[MasonLine][{marker}] {label} detour MISSING (prefixes=0) on {target.Name} — HarmonyPatchAll did not take");
+                $"[MasonLine][{marker}] {label} detour MISSING (prefixes=0) on {target.Name}; HarmonyPatchAll did not take");
     }
 
     private const float CollectHoldSeconds = 0.4f;   // vanilla dismantle Hold(duration=0.4) — recon 2026-07-17
