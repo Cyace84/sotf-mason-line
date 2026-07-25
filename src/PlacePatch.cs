@@ -27,7 +27,7 @@ internal static class PlacePatch
 
     private static void Postfix(TargetInfo __instance)
     {
-        if (_busy || !LaserLine.HasLine || __instance == null) return;
+        if (_busy || !MasonLine.HasLine || __instance == null) return;
 
         try
         {
@@ -43,7 +43,7 @@ internal static class PlacePatch
 
             // Only capture placements that are actually AT a string (≤2m sideways, between the
             // stakes; nearest line wins). Anything else on the map must build vanilla.
-            if (!LaserLine.TryProject(__instance.PlacePosition, out var snapped, out var dir)) return;
+            if (!MasonLine.TryProject(__instance.PlacePosition, out var snapped, out var dir)) return;
 
             _busy = true;
             __instance.SetPlacePosition(snapped);

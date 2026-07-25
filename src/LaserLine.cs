@@ -15,7 +15,7 @@ namespace MasonLine;
 /// plus a rope-knot mesh at each stake. While snap is on, the build-ghost placement position is projected
 /// onto this line (see <see cref="PlacePatch"/>), so a freely-placed log lays exactly along it.
 /// </summary>
-internal static class LaserLine
+internal static class MasonLine
 {
     /// <summary>One placed string line: geometry + its own world visuals. Kit economy: 1 kit =
     /// 1 line, so several crafted kits = several simultaneous lines (user bug 2026-07-17: the old

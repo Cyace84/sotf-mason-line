@@ -26,7 +26,15 @@ all move together. No grid, no custom buildable, no snap-node registration.
 
 Requires [RedLoader](https://github.com/ToniMacaroni/RedLoader).
 
-Drop `MasonLine.dll` into the game's `Mods/` folder. That's it.
+Drop `MasonLine.dll` into the game's `Mods/` folder, and `manifest.json` into `Mods/MasonLine/`
+next to it:
+
+```
+Mods/
+  MasonLine.dll
+  MasonLine/
+    manifest.json
+```
 
 ## Build from source
 

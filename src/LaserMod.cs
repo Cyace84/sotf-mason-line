@@ -101,7 +101,7 @@ public class LaserMod : SonsMod
 
         // place a stake = mouse click, like vanilla placement. No mod hotkey.
         if (held && gameplay && Input.GetMouseButtonDown(0))
-            LaserLine.DropPoint();
+            MasonLine.DropPoint();
 
         // drive the inventory hover outline (axe-style highlight) from IsHighlighted
         LineTool.UpdateInventoryHover();
@@ -110,22 +110,22 @@ public class LaserMod : SonsMod
         // collect the line. No mod hotkey: we read the player's own binding via Sons.Input.InputSystem,
         // so remapping Dismantle moves this too. The stakes jitter while the hold accumulates; release
         // early = nothing happens. J = instant clear.
-        bool aimingStake = gameplay && LaserLine.AimingAtStake();
-        if (aimingStake && Sons.Input.InputSystem.GetButtonDown(Sons.Input.InputSystem.Actions.DismantleElement)) LaserLine.Nudge();   // per-press kick, vanilla feel
+        bool aimingStake = gameplay && MasonLine.AimingAtStake();
+        if (aimingStake && Sons.Input.InputSystem.GetButtonDown(Sons.Input.InputSystem.Actions.DismantleElement)) MasonLine.Nudge();   // per-press kick, vanilla feel
         if (aimingStake && Sons.Input.InputSystem.GetButton(Sons.Input.InputSystem.Actions.DismantleElement))
         {
             _collectHold += Time.deltaTime;
             if (_collectHold >= CollectHoldSeconds)
             {
                 _collectHold = 0f;
-                LaserLine.EndShake();
-                LaserLine.CollectAimed();   // pulls out only the AIMED line; J still clears everything
+                MasonLine.EndShake();
+                MasonLine.CollectAimed();   // pulls out only the AIMED line; J still clears everything
             }
-            else if (_collectHold > 0.12f) LaserLine.Shake(_collectHold);    // brief grace = tap stays a nudge
+            else if (_collectHold > 0.12f) MasonLine.Shake(_collectHold);    // brief grace = tap stays a nudge
         }
-        else if (_collectHold > 0f) { _collectHold = 0f; LaserLine.EndShake(); }
-        LaserLine.UpdateNudge();
+        else if (_collectHold > 0f) { _collectHold = 0f; MasonLine.EndShake(); }
+        MasonLine.UpdateNudge();
 
-        LaserLine.UpdateGhost(held && gameplay);
+        MasonLine.UpdateGhost(held && gameplay);
     }
 }

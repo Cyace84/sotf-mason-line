@@ -78,7 +78,7 @@ internal static class LineTool
     {
         try
         {
-            LaserLine.ResetWorld();   // belt-and-braces: OnWorldExited may not fire on every load path
+            MasonLine.ResetWorld();   // belt-and-braces: OnWorldExited may not fire on every load path
             RegisterItemOnce();
 
             var data = ItemDatabaseManager.ItemById(ItemId);
@@ -124,7 +124,7 @@ internal static class LineTool
     /// into the next world — DDoL carried them across reloads => user-repro'd kit dupe 2026-07-17.</summary>
     public static void OnWorldExited()
     {
-        LaserLine.ResetWorld();
+        MasonLine.ResetWorld();
         _kitsOut = 0;
         // per-world pipeline state: without this, menu-time Ticks kept scanning dead scene objects
         // (Ready stayed true) and the doc on Ready ("for this world") was a lie (2026-07-22 review)
@@ -460,8 +460,8 @@ internal static class LineTool
         // Inventory layer (23) — done post-spawn in TryWireInventoryHover; InventoryCamera cullingMask
         // excludes layer 0, which is why any mesh here looked "invisible" before. Held-in-hand keeps the
         // procedural cylinder (its orientation was tuned separately).
-        var branchMesh = matDisplay ? LaserLine.StakeMesh() : null;
-        var branchMat = matDisplay ? LaserLine.StakeMat() : null;
+        var branchMesh = matDisplay ? MasonLine.StakeMesh() : null;
+        var branchMat = matDisplay ? MasonLine.StakeMat() : null;
         if (branchMesh != null)
         {
             var stake = new GameObject("Stake");
@@ -506,13 +506,13 @@ internal static class LineTool
             stake.transform.SetParent(host, false);
             stake.transform.localScale = new Vector3(0.045f, 0.22f, 0.045f);   // 44cm long stake
             stake.transform.localPosition = Vector3.zero;
-            var wood = LaserLine.WoodMat();
+            var wood = MasonLine.WoodMat();
             var sr = stake.GetComponent<Renderer>();
             if (wood != null && sr != null) sr.sharedMaterial = wood;
         }
 
-        var knotMesh = LaserLine.KnotMesh();
-        var ropeMat = LaserLine.RopeMaterial();
+        var knotMesh = MasonLine.KnotMesh();
+        var ropeMat = MasonLine.RopeMaterial();
         if (knotMesh != null)
         {
             var knot = new GameObject("Knot");
