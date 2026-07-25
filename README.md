@@ -1,7 +1,6 @@
 # Mason Line
 
-A craftable string line for Sons of the Forest. Stretch it between two stakes, and free logs
-snap to it. The first log of a wall lands dead-straight, no eyeballing.
+A craftable string line for Sons of the Forest. Stretch it between two stakes, and free logs snap to it. The first log of a wall lands dead-straight, no eyeballing.
 
 ## How to use
 
@@ -9,26 +8,19 @@ snap to it. The first log of a wall lands dead-straight, no eyeballing.
 2. **Equip** it and aim at the ground. A ghost stake shows where it'll land.
 3. **Left-click** to plant stake A, then again for stake B. A string runs between them.
 4. Place free logs near the string. The build ghost snaps onto the line automatically.
-5. **Hold Dismantle** while looking at a stake to pull the line out. The kit goes back to your
-   inventory. That's the vanilla action listed under Construction in the controls menu, bound to C
-   by default.
+5. **Hold Dismantle** while looking at a stake to pull the line out. The kit goes back to your inventory. That's the vanilla action listed under Construction in the controls menu, bound to C by default.
 
 Each crafted kit is one line. Craft more kits for more lines. They all work at the same time.
 
 ## How it works
 
-Harmony postfix on `TargetInfo.CalcRelativePlacePosition` projects `PlacePosition` onto the
-nearest string line (within 2 m, between the stakes). The build preview reads that field. So does
-the green/red validation, and so does the log that finally drops, which is why they never disagree.
-There's no grid involved, and nothing registers a snap node. The stakes aren't custom buildables
-either.
+Harmony postfix on `TargetInfo.CalcRelativePlacePosition` projects `PlacePosition` onto the nearest string line (within 2 m, between the stakes). The build preview reads that field. So does the green/red validation, and so does the log that finally drops, which is why they never disagree. There's no grid involved, and nothing registers a snap node. The stakes aren't custom buildables either.
 
 ## Install
 
 Requires [RedLoader](https://github.com/ToniMacaroni/RedLoader).
 
-Drop `MasonLine.dll` into the game's `Mods/` folder, and `manifest.json` into `Mods/MasonLine/`
-next to it:
+Drop `MasonLine.dll` into the game's `Mods/` folder, and `manifest.json` into `Mods/MasonLine/` next to it:
 
 ```
 Mods/
