@@ -33,9 +33,19 @@ git clone https://github.com/Cyace84/sotf-mason-line
 cd sotf-mason-line
 ```
 
-`lib/` must point to a directory containing the game's managed DLLs and RedLoader assemblies
-(Il2CppInterop.Runtime, RedLoader, SonsSdk, etc.). The repo ships a symlink; adjust it to
-your local paths or copy the DLLs in.
+`lib/` holds the compile-time references and is not in the repo. RedLoader generates them into
+your game folder the first time it runs, so install RedLoader and launch the game once, then:
+
+```
+GAME="/path/to/steamapps/common/Sons Of The Forest"
+mkdir -p lib
+cp "$GAME"/_RedLoader/Game/*.dll lib/    # Assembly-CSharp, Endnight.*, Sons.*, Unity modules
+cp "$GAME"/_RedLoader/net6/*.dll lib/    # RedLoader, SonsSdk, Il2CppInterop, 0Harmony
+rm -f lib/dobby.dll lib/Splash.dll       # native, not referenceable
+```
+
+The csproj references every DLL in that folder and copies none of them into the build. If you
+keep several SOTF mods around, one shared `lib/` symlinked into each repo also works.
 
 ```
 dotnet build        # produces bin/MasonLine.dll
