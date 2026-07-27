@@ -3,3 +3,6 @@ obj/
 .DS_Store
 lib/
 lib
+
+# crash logs / old build artifacts kept locally as recon evidence, not shipped
+backups/
