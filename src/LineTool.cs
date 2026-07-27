@@ -126,6 +126,10 @@ internal static class LineTool
     {
         GuideLine.ResetWorld();
         _kitsOut = 0;
+        // New Game does not go through SaveGameManager.Load, so a stale id from the slot we just quit
+        // would make THAT slot's marker match and hand out a free kit in the fresh world (and, since
+        // markers are kept, again in the original slot = dupe). Review 2026-07-27, defect #3.
+        _loadedSaveId = 0;
         // per-world pipeline state: without this, menu-time Ticks kept scanning dead scene objects
         // (Ready stayed true) and the doc on Ready ("for this world") was a lie (2026-07-22 review)
         Ready = false;
@@ -165,17 +169,56 @@ internal static class LineTool
         try
         {
             uint id = ParseSaveIdFromDir(dir);
-            if (_kitsOut > 0)
-            {
-                System.IO.File.WriteAllText(KitMarkerPath, $"{id} {_kitsOut}");
-                return;
-            }
-            // zero out: only clear OUR slot's marker — another slot's pending refund must survive
-            if (System.IO.File.Exists(KitMarkerPath) &&
-                System.IO.File.ReadAllText(KitMarkerPath).Trim().Split(' ')[0] == id.ToString())
-                System.IO.File.Delete(KitMarkerPath);
+            // Rewrite OUR slot's line only. A single global line meant saving slot B overwrote slot
+            // A's pending refund, so loading A found no marker and the staked-out kit was gone for
+            // good (review 2026-07-27, defect #2). The delete branch already knew this and compared
+            // ids; the write branch did not.
+            var lines = ReadMarkerLines();
+            lines.RemoveAll(l => SlotOfMarkerLine(l) == id);
+            if (_kitsOut > 0) lines.Add($"{id} {_kitsOut}");
+            WriteMarkerLines(lines);
         }
         catch { }
+    }
+
+    /// <summary>Marker file body: one "&lt;slotId&gt; &lt;kits&gt;" line per save slot that has kits in the
+    /// field. Missing file = nobody has anything staked out.</summary>
+    private static System.Collections.Generic.List<string> ReadMarkerLines()
+    {
+        var list = new System.Collections.Generic.List<string>();
+        try
+        {
+            if (!System.IO.File.Exists(KitMarkerPath)) return list;
+            foreach (var raw in System.IO.File.ReadAllLines(KitMarkerPath))
+            {
+                var line = raw.Trim();
+                if (line.Length > 0) list.Add(line);
+            }
+        }
+        catch { }
+        return list;
+    }
+
+    private static void WriteMarkerLines(System.Collections.Generic.List<string> lines)
+    {
+        try
+        {
+            if (lines.Count == 0)
+            {
+                if (System.IO.File.Exists(KitMarkerPath)) System.IO.File.Delete(KitMarkerPath);
+                return;
+            }
+            System.IO.File.WriteAllText(KitMarkerPath, string.Join("\n", lines) + "\n");
+        }
+        catch { }
+    }
+
+    /// <summary>Slot id a marker line belongs to, or uint.MaxValue when the line is not "&lt;id&gt; &lt;n&gt;"
+    /// (legacy shapes are left alone here and handled once at restore time).</summary>
+    private static uint SlotOfMarkerLine(string line)
+    {
+        var parts = line.Split(' ');
+        return parts.Length >= 2 && uint.TryParse(parts[0], out var id) ? id : uint.MaxValue;
     }
 
     /// <summary>Is a kit available to start a new line? Pipeline-down (dev fallback) = always yes.</summary>
@@ -237,29 +280,41 @@ internal static class LineTool
         _kitsOut = 0;
         try
         {
-            if (!System.IO.File.Exists(KitMarkerPath)) return;
-            var parts = System.IO.File.ReadAllText(KitMarkerPath).Trim().Split(' ');
+            var lines = ReadMarkerLines();
+            if (lines.Count == 0) return;
             var inv = LocalPlayer.Inventory;
             if (inv == null) return;
-            if (parts.Length < 2)
+
+            // Legacy shapes only ever occupied a whole one-line file: a bare count (pre-slot-id
+            // builds) or slot id 0 (the broken GetSelectedSaveId build). Retire on sight under the
+            // old one-shot anti-dupe gate; a multi-line file is always the current format.
+            if (lines.Count == 1)
             {
-                // legacy consume-time marker (no slot id): old one-shot heuristic, then retire it
-                System.IO.File.Delete(KitMarkerPath);
-                if (int.TryParse(parts[0], out var legacy) && legacy > 0 && inv.AmountOf(ItemId) == 0)
-                    for (int i = 0; i < legacy; i++) inv.AddItem(ItemId);
-                return;
+                var legacyParts = lines[0].Split(' ');
+                bool bareCount = legacyParts.Length < 2;
+                bool zeroSlot = !bareCount && legacyParts[0] == "0";
+                if (bareCount || zeroSlot)
+                {
+                    WriteMarkerLines(new System.Collections.Generic.List<string>());
+                    var countText = bareCount ? legacyParts[0] : legacyParts[1];
+                    if (int.TryParse(countText, out var legacy) && legacy > 0 && inv.AmountOf(ItemId) == 0)
+                        for (int i = 0; i < legacy; i++) inv.AddItem(ItemId);
+                    return;
+                }
             }
-            if (!uint.TryParse(parts[0], out var id) || !int.TryParse(parts[1], out var n) || n < 1) return;
-            if (id == 0)
+
+            if (_loadedSaveId == 0) return;   // New Game: no slot owns these kits
+            int n = 0;
+            foreach (var line in lines)
             {
-                // migration: marker from the broken GetSelectedSaveId build (always id 0) — one-shot
-                // refund under the old AmountOf==0 anti-dupe gate, then retire the marker
-                System.IO.File.Delete(KitMarkerPath);
-                if (inv.AmountOf(ItemId) == 0)
-                    for (int i = 0; i < n; i++) inv.AddItem(ItemId);
-                return;
+                var parts = line.Split(' ');
+                if (parts.Length >= 2 && uint.TryParse(parts[0], out var id) && id == _loadedSaveId)
+                {
+                    int.TryParse(parts[1], out n);
+                    break;
+                }
             }
-            if (id != _loadedSaveId) return;   // marker belongs to another slot (or this is a new game)
+            if (n < 1) return;   // this slot has nothing staked out (other slots' lines stay untouched)
             int given = 0;
             for (int i = 0; i < n; i++) if (inv.AddItem(ItemId)) given++;
             if (given > 0)

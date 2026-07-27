@@ -49,7 +49,7 @@ rm -f lib/dobby.dll lib/Splash.dll       # native, not referenceable
 The csproj references every DLL in that folder and copies none of them into the build. If you keep several SOTF mods around, one shared `lib/` symlinked into each repo also works.
 
 ```
-dotnet build        # produces bin/MasonLine.dll
+dotnet build        # produces bin/Debug/MasonLine.dll
 ./deploy.sh         # builds + copies the DLL and manifest into the game's Mods/
 ```
 

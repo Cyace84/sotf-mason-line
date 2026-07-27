@@ -6,7 +6,7 @@ namespace MasonLine;
 
 /// <summary>
 /// RedLoader mod entry. The tool is the craftable "Mason Line" (<see cref="LineTool"/>,
-/// stick + rope); while it is equipped, LMB (or L) drops a guide point at the crosshair
+/// stick + rope); while it is equipped, LMB drops a guide point at the crosshair
 /// (1st = stake A, 2nd = stake B -> the string line runs A->B). Free log placement near the string
 /// snaps onto it; hold Dismantle on a stake to pull the line out (kit returns to the inventory).
 /// A translucent ghost stake previews where the point will land. If the item pipeline failed to
@@ -34,7 +34,7 @@ public class MasonLineMod : SonsMod
         // hides the save dir, and that's the only reliable slot-id source for in-game saves
         RLog.Msg(System.ConsoleColor.Cyan,
             "[MasonLine] initialized. Craft the Mason Line (stick + rope), " +
-            "hold it: LMB/L plants a stake, hold Dismantle on a stake to collect the line");
+            "hold it: LMB plants a stake, hold Dismantle on a stake to collect the line");
         // NOTE: do NOT verify here — RedLoader applies HarmonyPatchAll AFTER OnInitializeMod, so an
         // init-time GetPatchInfo reports a FALSE 'MISSING' (proven 2026-07-24: init said MISSING yet
         // the guard fired skips later same session). Verify on the first Tick instead.
@@ -109,7 +109,7 @@ public class MasonLineMod : SonsMod
         // Aim at a stake + HOLD the vanilla Dismantle action (RU "Убрать", default C, REBINDABLE) to
         // collect the line. No mod hotkey: we read the player's own binding via Sons.Input.InputSystem,
         // so remapping Dismantle moves this too. The stakes jitter while the hold accumulates; release
-        // early = nothing happens. J = instant clear.
+        // early = nothing happens.
         bool aimingStake = gameplay && GuideLine.AimingAtStake();
         if (aimingStake && Sons.Input.InputSystem.GetButtonDown(Sons.Input.InputSystem.Actions.DismantleElement)) GuideLine.Nudge();   // per-press kick, vanilla feel
         if (aimingStake && Sons.Input.InputSystem.GetButton(Sons.Input.InputSystem.Actions.DismantleElement))
@@ -119,7 +119,7 @@ public class MasonLineMod : SonsMod
             {
                 _collectHold = 0f;
                 GuideLine.EndShake();
-                GuideLine.CollectAimed();   // pulls out only the AIMED line; J still clears everything
+                GuideLine.CollectAimed();   // pulls out only the AIMED line, never the others
             }
             else if (_collectHold > 0.12f) GuideLine.Shake(_collectHold);    // brief grace = tap stays a nudge
         }
