@@ -47,6 +47,24 @@ internal static class MasonLineStrings
             "Wbij dwa kołki i naciągnij między nimi sznurek. Swobodnie stawiane kłody ustawiają się wzdłuż niego."),
         ["ja"] = new("水糸", "水糸",
             "杭を二本打ち、その間に糸を張ります。自由配置の丸太が糸に沿って並びます。"),
+        ["cs"] = new("Zednická šňůra", "Zednické šňůry",
+            "Zatlučte dva kolíky a napněte mezi nimi šňůru. Volně pokládané kmeny se srovnají podle ní."),
+        ["fi"] = new("Muurausnaru", "Muurausnarut",
+            "Lyö kaksi paalua ja kiristä naru niiden väliin. Vapaasti aseteltavat tukit asettuvat sen mukaan."),
+        ["sv"] = new("Murarsnöre", "Murarsnören",
+            "Slå ner två pinnar och spänn snöret mellan dem. Fritt placerade stockar rätar in sig efter det."),
+        ["tr"] = new("Duvarcı ipi", "Duvarcı ipleri",
+            "İki kazık çakın ve aralarına ipi gerin. Serbestçe yerleştirilen kütükler ipe göre hizalanır."),
+        ["ko"] = new("수평실", "수평실",
+            "말뚝 두 개를 박고 그 사이에 실을 팽팽하게 당깁니다. 자유롭게 놓는 통나무가 그 선에 맞추어 정렬됩니다."),
+        // Both Chinese locales are listed in full: the language part alone would send Taiwan the
+        // simplified characters.
+        ["zh-hans"] = new("瓦工线", "瓦工线",
+            "钉下两根桩，在两桩之间拉紧线。自由放置的原木会自动对齐到这条线上。"),
+        ["zh"] = new("瓦工线", "瓦工线",
+            "钉下两根桩，在两桩之间拉紧线。自由放置的原木会自动对齐到这条线上。"),
+        ["zh-hant"] = new("瓦工線", "瓦工線",
+            "釘下兩根樁，在兩樁之間拉緊線。自由放置的原木會自動對齊到這條線上。"),
     };
 
     /// <summary>Writes the item's strings into every locale the game offers. Called once, right after
@@ -72,9 +90,11 @@ internal static class MasonLineStrings
             {
                 var locale = locales[i];
                 if (locale == null) continue;
-                string code = locale.Identifier.Code ?? "";
-                string language = code.Split('-')[0].ToLowerInvariant();
-                if (!ByLanguage.TryGetValue(language, out var text))
+                string code = (locale.Identifier.Code ?? "").ToLowerInvariant();
+                // Full code first: zh-Hant and zh-Hans differ in script, and matching on "zh" alone
+                // would hand Taiwan the simplified characters.
+                if (!ByLanguage.TryGetValue(code, out var text) &&
+                    !ByLanguage.TryGetValue(code.Split('-')[0], out text))
                 {
                     missing.Add(code);
                     text = ByLanguage["en"];
