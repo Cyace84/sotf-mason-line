@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/ToniMacaroni/RedLoader/main/MetadataSchema.json",
   "id": "MasonLine",
-  "author": "cyace",
+  "author": "cyace84",
   "version": "1.0.0",
   "description": "Craftable string line (stick + rope). Stretch it between two stakes, free logs snap to it for straight walls. Hold Dismantle on a stake to collect.",
   "type": "Mod",
