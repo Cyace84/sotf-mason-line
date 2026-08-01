@@ -41,10 +41,9 @@ internal static class LineTool
     private const int StickId = 392;
     private const int RopeId = 403;
 
-    /// <summary>True once the item pipeline initialized for this world. While false the mod
-    /// falls back to ungated placement, so a broken item setup never bricks the core feature.</summary>
+    /// <summary>True once the item pipeline initialized for this world. Until then the tool is
+    /// inert: no item means no stakes.</summary>
     public static bool Ready;
-    private static bool _setupFailed;   // TRUE only after a THROWN Setup — gates the dev fallback
 
     // Inventory hover: the game DOES detect hover on our item (it sets InventoryLayoutItem.IsHighlighted
     // and plays the wobble), but its InitMeshOutliner never collects our MeshOutliners into the layout
@@ -74,10 +73,9 @@ internal static class LineTool
     {
         get
         {
-            // dev fallback ONLY when setup actually FAILED. Before setup completes (world still
-            // loading) this must be FALSE — the old blanket "!Ready => held" made the ghost stake
-            // flash in front of the player for the first seconds of every load.
-            if (!Ready) return _setupFailed;
+            // No item, no tool. This used to answer "held" whenever setup had thrown, which turned a
+            // broken setup into every left-click planting a stake.
+            if (!Ready) return false;
             try
             {
                 var props = LocalPlayer.Inventory?.InventoryProps;
@@ -97,6 +95,14 @@ internal static class LineTool
         {
             GuideLine.ResetWorld();   // belt-and-braces: OnWorldExited may not fire on every load path
             RegisterItemOnce();
+
+            // Registration refuses to overwrite a foreign item on our id, and ItemById would happily
+            // hand us that foreign item to dress up as ours. Stop here instead: no item, no tool.
+            if (!OwnsRegisteredItem())
+            {
+                ReportItemIdConflict();
+                return;
+            }
 
             var data = ItemDatabaseManager.ItemById(ItemId);
             if (data == null) { RLog.Error("[MasonLine] item data missing after registration"); return; }
@@ -121,8 +127,7 @@ internal static class LineTool
         catch (System.Exception ex)
         {
             Ready = false;
-            _setupFailed = true;
-            RLog.Error($"[MasonLine] item setup failed (placement stays ungated): {ex}");
+            RLog.Error($"[MasonLine] item setup failed, the tool stays inert this world: {ex}");
         }
     }
 
@@ -133,6 +138,10 @@ internal static class LineTool
     // A marker file survives a game restart so a saved-with-line-out inventory gets the kit back
     // (the line itself is not in the save). Signatures observed: PlayerInventory.AddItem/RemoveItem/
     // AmountOf decompile.
+    /// <summary>Upper bound for a refund, mirroring the item's stack size at _maxAmount. Guards the
+    /// refund loop against a hand-edited or corrupt marker.</summary>
+    private const int MaxKits = 20;
+
     private static int _kitsOut;   // kits currently staked out as standing lines
     // UserData is where RedLoader mods keep their own files; persistentDataPath is the game's save
     // folder and has no business holding ours.
@@ -208,16 +217,26 @@ internal static class LineTool
             // good. The delete branch already knew this and compared
             // ids; the write branch did not.
             var lines = ReadMarkerLines();
+            if (lines == null)
+            {
+                RLog.Error($"[MasonLine] the kit marker is unreadable, so {_kitsOut} staked-out kit(s) " +
+                           "cannot be recorded for this save; collect your lines before quitting");
+                return;
+            }
             lines.RemoveAll(l => SlotOfMarkerLine(l) == id);
             if (_kitsOut > 0) lines.Add($"{id} {_kitsOut}");
-            WriteMarkerLines(lines);
+            if (!WriteMarkerLines(lines) && _kitsOut > 0)
+                RLog.Error($"[MasonLine] {_kitsOut} staked-out kit(s) could not be recorded; " +
+                           "collect your lines before quitting or they are lost");
         }
-        catch { }
+        catch (System.Exception ex) { RLog.Error($"[MasonLine] saving the kit marker failed: {ex}"); }
     }
 
     /// <summary>Marker file body: one "&lt;slotId&gt; &lt;kits&gt;" line per save slot that has kits in the
     /// field. Missing file = nobody has anything staked out.</summary>
-    private static System.Collections.Generic.List<string> ReadMarkerLines()
+    /// <summary>Returns null when the file exists but could not be read. A missing file is an empty
+    /// list; an unreadable one must NOT look the same, or a rewrite would drop the other slots.</summary>
+    private static System.Collections.Generic.List<string>? ReadMarkerLines()
     {
         var list = new System.Collections.Generic.List<string>();
         try
@@ -229,36 +248,65 @@ internal static class LineTool
                 if (line.Length > 0) list.Add(line);
             }
         }
-        catch { }
+        catch (System.Exception ex)
+        {
+            RLog.Error($"[MasonLine] cannot read {KitMarkerPath}: {ex.Message}");
+            return null;
+        }
         return list;
     }
 
-    private static void WriteMarkerLines(System.Collections.Generic.List<string> lines)
+    /// <summary>Writes through a temp file so a crash or a full disk cannot leave a half-written
+    /// marker: the old one survives intact instead. False means the kits are NOT recorded.</summary>
+    private static bool WriteMarkerLines(System.Collections.Generic.List<string> lines)
     {
         try
         {
             if (lines.Count == 0)
             {
                 if (System.IO.File.Exists(KitMarkerPath)) System.IO.File.Delete(KitMarkerPath);
-                return;
+                return true;
             }
-            System.IO.File.WriteAllText(KitMarkerPath, string.Join("\n", lines) + "\n");
+            var tmp = KitMarkerPath + ".tmp";
+            System.IO.File.WriteAllText(tmp, string.Join("\n", lines) + "\n");
+            System.IO.File.Move(tmp, KitMarkerPath, true);
+            return true;
         }
-        catch { }
+        catch (System.Exception ex)
+        {
+            RLog.Error($"[MasonLine] cannot write {KitMarkerPath}: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>Slot id a marker line belongs to, or uint.MaxValue when the line is not "&lt;id&gt; &lt;n&gt;"
     /// (legacy shapes are left alone here and handled once at restore time).</summary>
-    private static uint SlotOfMarkerLine(string line)
+    private static uint SlotOfMarkerLine(string line) =>
+        ParseMarkerLine(line, out var id, out _) ? id : uint.MaxValue;
+
+    /// <summary>The one parser for "&lt;slotId&gt; &lt;kits&gt;". Splits on any run of whitespace, demands
+    /// exactly two fields, and caps the count at a stack of kits so a hand-edited file cannot spin
+    /// the refund loop.</summary>
+    private static bool ParseMarkerLine(string line, out uint slot, out int kits)
     {
-        var parts = line.Split(' ');
-        return parts.Length >= 2 && uint.TryParse(parts[0], out var id) ? id : uint.MaxValue;
+        slot = uint.MaxValue; kits = 0;
+        var parts = line.Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2) return false;
+        if (!uint.TryParse(parts[0], out slot)) { slot = uint.MaxValue; return false; }
+        if (!int.TryParse(parts[1], out kits) || kits < 0) { kits = 0; return false; }
+        if (kits > MaxKits)
+        {
+            RLog.Warning($"[MasonLine] kit marker claims {kits} kits for slot {slot}; capped at {MaxKits}");
+            kits = MaxKits;
+        }
+        return true;
     }
 
-    /// <summary>Is a kit available to start a new line? Pipeline-down (dev fallback) = always yes.</summary>
+    /// <summary>Is a kit available to start a new line? With no registered item there is nothing to
+    /// spend, so the answer is no rather than the old free-for-all.</summary>
     public static bool HasKit()
     {
-        if (!Ready) return true;
+        if (!Ready) return false;
         try
         {
             var inv = LocalPlayer.Inventory;
@@ -316,6 +364,14 @@ internal static class LineTool
         {
             MigrateMarkerFromSaveFolder();
             var lines = ReadMarkerLines();
+            // Unreadable is not the same as empty: refunding nothing is right for an absent marker and
+            // wrong for one we simply could not open, so say so instead of quietly skipping.
+            if (lines == null)
+            {
+                RLog.Error("[MasonLine] the kit marker could not be read; staked-out kits are not " +
+                           "refunded this load");
+                return;
+            }
             if (lines.Count == 0) return;
             var inv = LocalPlayer.Inventory;
             if (inv == null) return;
@@ -325,15 +381,24 @@ internal static class LineTool
             // old one-shot anti-dupe gate; a multi-line file is always the current format.
             if (lines.Count == 1)
             {
-                var legacyParts = lines[0].Split(' ');
+                var legacyParts = lines[0].Split(new[] { ' ', '\t' }, System.StringSplitOptions.RemoveEmptyEntries);
                 bool bareCount = legacyParts.Length < 2;
                 bool zeroSlot = !bareCount && legacyParts[0] == "0";
                 if (bareCount || zeroSlot)
                 {
-                    WriteMarkerLines(new System.Collections.Generic.List<string>());
                     var countText = bareCount ? legacyParts[0] : legacyParts[1];
-                    if (int.TryParse(countText, out var legacy) && legacy > 0 && inv.AmountOf(ItemId) == 0)
-                        for (int i = 0; i < legacy; i++) inv.AddItem(ItemId);
+                    if (!int.TryParse(countText, out var legacy) || legacy < 1)
+                    {
+                        RLog.Warning($"[MasonLine] kit marker '{lines[0]}' is not readable; leaving it in place");
+                        return;
+                    }
+                    if (legacy > MaxKits) legacy = MaxKits;
+                    if (inv.AmountOf(ItemId) > 0) return;   // already refunded once
+                    int back = 0;
+                    for (int i = 0; i < legacy; i++) if (inv.AddItem(ItemId)) back++;
+                    // Only now: the file is the sole record, so it goes away once its kits are in hand.
+                    if (back == legacy) WriteMarkerLines(new System.Collections.Generic.List<string>());
+                    else RLog.Warning($"[MasonLine] only {back} of {legacy} kit(s) fit; the marker stays for the rest");
                     return;
                 }
             }
@@ -341,17 +406,17 @@ internal static class LineTool
             if (_loadedSaveId == 0) return;   // New Game: no slot owns these kits
             int n = 0;
             foreach (var line in lines)
-            {
-                var parts = line.Split(' ');
-                if (parts.Length >= 2 && uint.TryParse(parts[0], out var id) && id == _loadedSaveId)
-                {
-                    int.TryParse(parts[1], out n);
-                    break;
-                }
-            }
+                if (ParseMarkerLine(line, out var id, out var kits) && id == _loadedSaveId) { n = kits; break; }
             if (n < 1) return;   // this slot has nothing staked out (other slots' lines stay untouched)
             int given = 0;
             for (int i = 0; i < n; i++) if (inv.AddItem(ItemId)) given++;
+            // Whatever would not fit stays owed, so the next save records it again instead of
+            // rewriting the slot's line to nothing.
+            if (given < n)
+            {
+                _kitsOut = n - given;
+                RLog.Warning($"[MasonLine] only {given} of {n} kit(s) fit in the pack; the rest stay on the marker");
+            }
             if (given > 0)
                 RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] {given} kit(s) were staked out when this save was made, and they are back in your pack");
         }
