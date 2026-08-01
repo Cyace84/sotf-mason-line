@@ -46,27 +46,25 @@ internal static class RenderableListenerCrashGuard
         if (__instance == null) return true;
         if (__instance.GetIl2CppType().Name != "CustomItemRenderable") return true;   // vanilla path
 
-        // Managed-injected renderable: its event is junk — never reach AddCall on it.
+        // Ownership BEFORE anything else. CustomItemRenderable is the SDK's type, so every mod's
+        // custom item passes through here, and our injected model is the only thing that says a
+        // renderable is ours — a filled _cachedLoadedObject does not, another mod's item has one too.
+        var cached = __instance._cachedLoadedObject;
+        var loaded = cached != null && cached.name == LineTool.InvModelCloneName
+            ? cached
+            : LineTool.FindOurInvModel(__instance);
+
+        // Someone else's item. Leave it completely alone: replacing its event here would throw away
+        // the listeners its owner had already registered.
+        if (loaded == null) return true;
+
+        // Ours, and its event is junk — never reach AddCall on it.
         LineTool.SanitizeRenderable(__instance);   // also protects the OnEnable→Invoke path
-
-        var loaded = __instance._cachedLoadedObject;
-
-        // Nothing cached yet. Either our own clone got here before the sweep did, in which case the
-        // model is already a child and we can cache it ourselves, or this renderable belongs to some
-        // other SDK mod: CustomItemRenderable is the SDK's type, so every mod's custom item lands in
-        // this prefix, not just ours.
-        if (loaded == null)
+        if (cached == null)
         {
-            loaded = LineTool.FindOurInvModel(__instance);
-            if (loaded != null) __instance._cachedLoadedObject = loaded;
+            __instance._cachedLoadedObject = loaded;
             Dbg.Msg(System.ConsoleColor.Magenta,
-                $"[MasonLine] listener-guard: no cached model on '{__instance.name}' " +
-                $"-> {(loaded != null ? "self-healed " + loaded.name : "not ours")}");
-
-            // Not our item. The event has been replaced with a fresh one above, so AddCall is safe
-            // now; let the original run and register the other mod's callback properly. Swallowing
-            // it here would leave their model waiting for a notification that never comes.
-            if (loaded == null) return true;
+                $"[MasonLine] listener-guard: cached our model on '{__instance.name}' -> {loaded.name}");
         }
 
         if (_handled < 8)
