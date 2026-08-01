@@ -25,9 +25,15 @@ public class MasonLineMod : SonsMod
     {
         RenderablePatch.Install(HarmonyInstance);   // heisen-crash guard v2: mute OnEnable Invoke for our item
         // register the ItemData as early as possible: the save's inventory deserializes BEFORE
-        // OnAfterSpawn, and unknown ItemIds are dropped (cold-start kit loss, 2026-07-22). The
+        // OnAfterSpawn, and unknown ItemIds are dropped (cold-start kit loss,). The
         // SaveGameManager.Load prefix (SavePathPatch) retries right before deserialize as a backstop.
-        SdkEvents.OnSdkInitialized.Subscribe(() => LineTool.TryRegisterEarly("sdk-init"));
+        MasonLineConfig.Init();
+        LineTool.ApplyConfig();
+        SdkEvents.OnSdkInitialized.Subscribe(() =>
+        {
+            LineTool.TryRegisterEarly("sdk-init");
+            SUI.SettingsRegistry.CreateSettings(this, null, typeof(MasonLineConfig));
+        });
         SdkEvents.OnAfterSpawn.Subscribe(LineTool.Setup);
         SdkEvents.OnWorldExited.Subscribe(LineTool.OnWorldExited);      // DDoL lines must die with the world (dupe fix)
         // save-time kit marker: SavePathPatch (Harmony on SaveGameManager.Save/Load) — the SDK event
@@ -36,14 +42,14 @@ public class MasonLineMod : SonsMod
             "[MasonLine] initialized. Craft the Mason Line (stick + rope), " +
             "hold it: LMB plants a stake, hold Dismantle on a stake to collect the line");
         // NOTE: do NOT verify here — RedLoader applies HarmonyPatchAll AFTER OnInitializeMod, so an
-        // init-time GetPatchInfo reports a FALSE 'MISSING' (proven 2026-07-24: init said MISSING yet
+        // init-time GetPatchInfo reports a FALSE 'MISSING' (proven: init said MISSING yet
         // the guard fired skips later same session). Verify on the first Tick instead.
     }
 
     private bool _guardVerified;
 
     /// <summary>
-    /// Deterministic detour-liveness check (inventory-crash hunt 2026-07-23). The 07-23 crash
+    /// Deterministic detour-liveness check (inventory-crash hunt). The 07-23 crash
     /// session logged 12x "ClosestPoint can only be used with..." FROM INSIDE
     /// TryTriggerHardSurfaceImpact — statically impossible if the prefix runs (ISIL: ClosestPoint
     /// is invoked on impactCollider only, the exact object the prefix filters; both call sites —
@@ -88,7 +94,7 @@ public class MasonLineMod : SonsMod
                 $"[MasonLine][{marker}] {label} detour MISSING (prefixes=0) on {target.Name}; HarmonyPatchAll did not take");
     }
 
-    private const float CollectHoldSeconds = 0.4f;   // vanilla dismantle Hold(duration=0.4) — recon 2026-07-17
+    private const float CollectHoldSeconds = 0.4f;   // vanilla dismantle Hold(duration=0.4) — matches the vanilla dismantle hold
     private static float _collectHold;
 
     private void Tick()

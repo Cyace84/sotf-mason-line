@@ -4,11 +4,11 @@ using UnityEngine;
 namespace MasonLine;
 
 /// <summary>
-/// Kills the inventory heisen-crash (AV at UnityEvent`1.Invoke ← CustomItemRenderable.OnEnable;
-/// ErrorLog.log 2026-07-16 04:14, 07-17 00:48 and 07-17 01:12 — the last one WITH the v1 guard
-/// installed, proving the ancestor-name scope check loses: clones fire OnEnable during Instantiate,
-/// BEFORE being parented under the BuildersLine layout, so the walk up found nothing and the
-/// poisoned Invoke ran anyway).
+/// Kills the inventory crash that fires from CustomItemRenderable.OnEnable.
+///
+/// An earlier version of this guard decided whether an object was ours by walking up its parents.
+/// That loses the race: a clone fires OnEnable while it is still being instantiated, before it is
+/// parented under our layout, so the walk finds nothing and the crash happens anyway.
 ///
 /// Mechanism: the SDK never subscribes to _onRenderableLoaded — only the GAME does, and it is that
 /// interop AddCall (RankException, the craft-vanish hole) that leaves the event's native call-list
@@ -61,7 +61,7 @@ internal static class RenderablePatch
             // _gameObject is a managed field of the injected class, set in Init() right after
             // AddComponent — reliable BEFORE the first OnEnable, unlike the transform hierarchy.
             var go = _gameObjectField!.GetValue(__instance) as GameObject;
-            if (go == null || !go.name.Contains("BuildersLine")) return true;   // not ours → vanilla
+            if (go == null || !go.name.Contains("MasonLine")) return true;   // not ours → vanilla
 
             // ours: best-effort defuse the event too, then NEVER Invoke — nothing we rely on listens
             var ar = __instance as Endnight.Rendering.AssetReferenceRenderable;

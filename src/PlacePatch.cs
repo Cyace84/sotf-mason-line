@@ -36,18 +36,18 @@ internal static class PlacePatch
             // get warped too, narrow this to active module == PlaceBeamOnGroundModule.
             // NOTE: the game's background snap-point predictor (PredictedSnapPointsUpdater →
             // PlaceLeaningBeamStructureModule fake pilars) also calls CalcRelativePlacePosition on
-            // half-built TargetInfos where get_IsTerrain THROWS an Il2CppException (Latest.log
-            // 2026-07-16 04:4x, 12 stack-trace spams). Those calls are not the player's active
-            // placement — swallow and leave them vanilla.
+            // half-built TargetInfos, where reading IsTerrain throws. Those calls are not the
+            // player's active placement, so swallow the exception and leave them vanilla.
             if (!__instance.IsTerrain) return;
 
-            // Only capture placements that are actually AT a string (≤2m sideways, between the
-            // stakes; nearest line wins). Anything else on the map must build vanilla.
+            // Only capture placements that are actually AT a string (within the configured snap
+            // distance sideways, between the stakes; nearest line wins). Anything else on the map
+            // must build vanilla.
             if (!GuideLine.TryProject(__instance.PlacePosition, out var snapped, out var dir)) return;
 
             _busy = true;
             __instance.SetPlacePosition(snapped);
-            // Orient the log along the snapped line. If it comes out perpendicular, swap to Cross(up, dir).
+            // Lay the log along the line it just snapped to.
             __instance.SetPlaceAxis(dir);
         }
         catch { }

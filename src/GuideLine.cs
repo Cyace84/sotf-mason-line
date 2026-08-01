@@ -10,7 +10,7 @@ namespace MasonLine;
 ///
 /// The line is defined by TWO aimed points (A, B), so it runs exactly through two real-world spots.
 /// Visually it's a mason line: a wooden stake at each end and a rope strung between them.
-/// The rope is ONE continuous procedurally-generated tube mesh following a catenary sag (so lighting
+/// The rope is ONE continuous procedurally-generated tube mesh that sags between the stakes (so lighting
 /// flows smoothly with no visible segment seams), skinned with the game's own RopeLogATileable material,
 /// plus a rope-knot mesh at each stake. While snap is on, the build-ghost placement position is projected
 /// onto this line (see <see cref="PlacePatch"/>), so a freely-placed log lays exactly along it.
@@ -18,7 +18,7 @@ namespace MasonLine;
 internal static class GuideLine
 {
     /// <summary>One placed string line: geometry + its own world visuals. Kit economy: 1 kit =
-    /// 1 line, so several crafted kits = several simultaneous lines (user bug 2026-07-17: the old
+    /// 1 line, so several crafted kits = several simultaneous lines (user bug: the old
     /// static singleton allowed only one line in the world).</summary>
     private sealed class Line
     {
@@ -54,12 +54,12 @@ internal static class GuideLine
     private static GameObject? _pendingStake;   // stake A of the line being defined
 
     /// <summary>Aim distance (m) to a stake base that counts as "looking at it" for C-collect.</summary>
-    // 0.45 was too tight to hit without a visual cue (user 2026-07-16); with the ShowMessage prompt
+    // 0.45 was too tight to hit without a visual cue; with the ShowMessage prompt
     // the stake is still the clear target, so a generous radius just removes the pixel-hunt.
     private const float CollectAimRadius = 1.0f;
 
     // Ghost tint: translucent white like the vanilla build ghosts (the old (0.55,0.8,1) blue read as
-    // an artifact — user 2026-07-16). Live-tunable via tune.sh ghost R G B A.
+    // an artifact — user). Live-tunable via tune.sh ghost R G B A.
     private static readonly Color GhostTint = new Color(1f, 1f, 1f, 0.3f);
 
     private const float StakeHeight = 1.1f;
@@ -75,9 +75,9 @@ internal static class GuideLine
     private static readonly Vector3 TieOffset = new Vector3(0.02f, StakeHeight * 0.5f + 0.75f, 0f);
     private const float RopeRadius = 0.018f;
     private const int RopeSides = 8;
-    /// <summary>UV v-units per meter along the rope. Live-tuned 2026-07-06 against the knot mesh
-    /// (eval ladder 0.05→0.10→0.08→0.15, user-approved 0.15). The GAME 'rope' mesh uses 0.0227/m
-    /// at r=0.04 (probed live); scaling by radius gave 0.05 — still too stretched next to the knot.</summary>
+    /// <summary>UV v-units per meter along the rope, tuned by eye against the knot mesh it meets.
+    /// The game's own rope mesh works out to 0.0227/m at r=0.04, but simply scaling that by our
+    /// radius leaves the texture visibly stretched where the two meet.</summary>
     private const float RopeVPerMeter = 0.15f;
     private const int RopeSegments = 24;
     private const float SagFraction = 0.06f;
@@ -114,8 +114,9 @@ internal static class GuideLine
         return false;
     }
 
-    /// <summary>L: drop the next defining point. First press = A (stake), second = B (stake + rope).
-    /// Each completed line consumes one kit; with no kit in the inventory nothing plants.</summary>
+    /// <summary>Drop the next defining point: first click plants stake A, second plants stake B and
+    /// strings the rope. Each completed line consumes one kit; with no kit in the pack nothing
+    /// plants.</summary>
     public static void DropPoint()
     {
         if (!_haveA && !LineTool.HasKit())
@@ -170,7 +171,7 @@ internal static class GuideLine
 
     /// <summary>Is the crosshair pointing at one of the planted stakes? Vanilla-style: the game
     /// sphere-casts r=0.2 over 2.25m from the camera against the stick's capsule (layer-21 recon
-    /// 2026-07-17). Our stakes carry no colliders, so the equivalent cheap test is the distance
+    ///). Our stakes carry no colliders, so the equivalent cheap test is the distance
     /// between the camera's view segment and the stake's axis segment (base → base+StakeHeight):
     /// aim anywhere along the stick, even looking up at it point-blank.</summary>
     private const float CollectReach = 2.5f;          // camera-to-stick reach (vanilla 2.475)
@@ -233,7 +234,7 @@ internal static class GuideLine
     // ---- hold-to-collect shake (vanilla dismantle wobble, ScrewStructureDestruction.Routine style:
     // damped organic forces, not a mechanical sine — Perlin noise at ~8Hz + amplitude that grows with
     // hold progress). Rotation-only jitter around the stakes' settled rotation: the stake BASES don't
-    // move, so AimingAtStake stays stable during the hold. A short C TAP = decaying nudge (vanilla
+    // move, so AimingAtStake stays stable during the hold. A short TAP = decaying nudge (vanilla
     // gives a kick per press even if you let go).
     private static GameObject? _shakeStakeA, _shakeStakeB;   // stakes captured at shake/nudge start
     private static Quaternion _shakeBaseA, _shakeBaseB;
@@ -243,7 +244,7 @@ internal static class GuideLine
 
     // ---- vanilla wobble rig: the game's dismantle shake is the authored legacy clip
     // 'PreviewAnim -  Wobble' whose curves target a child named "Renderable" (live-probed on
-    // PreviewAnimationManager._animationShell 2026-07-17: max ~1.6deg / ~5mm — SUBTLE). We sample
+    // PreviewAnimationManager._animationShell: max ~1.6deg / ~5mm — SUBTLE). We sample
     // the clip onto a hidden proxy (root + "Renderable" child) and copy the child's local pose
     // onto the stakes. WobbleExtraLite drives the tap-nudge.
     private const float WobbleSeconds = 0.4f;         // vanilla dismantle hold duration
@@ -345,7 +346,8 @@ internal static class GuideLine
         RestoreShakeBases();
     }
 
-    /// <summary>Short C tap on a stake: one decaying kick, vanilla per-press dismantle feedback.</summary>
+    /// <summary>A short dismantle tap on a stake: one decaying kick, the same feedback vanilla gives
+    /// for a tap too short to dismantle anything.</summary>
     public static void Nudge()
     {
         if (_shaking) return;
@@ -369,7 +371,7 @@ internal static class GuideLine
         }
     }
 
-    /// <summary>Vanilla stick-plant sound (user-identified via FMOD bank browse 2026-07-17:
+    /// <summary>Vanilla stick-plant sound (user-identified via FMOD bank browse:
     /// the first sound of a vanilla standing-stick placement).</summary>
     public static void PlayPlaceSound(Vector3 pos)
     {
@@ -378,14 +380,14 @@ internal static class GuideLine
     }
 
     /// <summary>Wood creak at hold start — plays the moment the dismantle shake begins
-    /// (user A/B test 2026-07-17: correct creak, must fire on hold, not on completion).</summary>
+    /// (user A/B test: correct creak, must fire on hold, not on completion).</summary>
     public static void PlayWobbleSound()
     {
         try { FMODCommon.PlayOneshot("event:/SotF Events/player sounds/Build Sounds/build_log_wobble", _aimedPos); }
         catch { }
     }
 
-    /// <summary>Pull-out completion: the inventory stick-pickup thud (user 2026-07-17: the foley
+    /// <summary>Pull-out completion: the inventory stick-pickup thud (user: the foley
     /// 'new_pickups/pickup_sticks' is the loud ground-sticks grab — wrong; the dull ending is the
     /// Inv pickup).</summary>
     private static void PlayCollectSound(Vector3 pos)
@@ -394,7 +396,7 @@ internal static class GuideLine
         catch { }
     }
 
-    /// <summary>Hold-C completed: pull out the AIMED line (kit back) or cancel the pending stake A
+    /// <summary>Hold-to-dismantle completed: pull out the AIMED line (kit back) or cancel the pending stake A
     /// (nothing was consumed yet). Other lines stay standing.</summary>
     public static void CollectAimed()
     {
@@ -418,7 +420,7 @@ internal static class GuideLine
 
     /// <summary>World unload/load: the lines are NOT part of the save and the stakes are DDoL — left
     /// alone they survive into a reloaded older save whose inventory still holds the kits
-    /// (user-repro'd dupe 2026-07-17). Destroy every visual, drop all cached scene assets (materials/
+    /// (user-repro'd dupe). Destroy every visual, drop all cached scene assets (materials/
     /// meshes/clips unload with the world; the getters re-find them lazily). NO kit refunds here —
     /// the save-time marker handles inventory restitution on load.</summary>
     public static void ResetWorld()
@@ -439,22 +441,22 @@ internal static class GuideLine
         _wobbleInitTried = false;
         // null the asset AND its tried-flag together — nulling only the asset left the getter
         // returning the cached null in the next world => materialless renderers = PINK stick on the
-        // crafting mat (user repro 2026-07-18)
+        // crafting mat
         _woodMat = null; _woodTried = false;
         _ropeMat = null; _ropeMatTried = false;
         _stakeMat = null; _stakeMatTried = false;
         _knotMesh = null; _knotMeshTried = false;
         _stakeMesh = null; _stakeMeshTried = false;
         // the adopted ghost material died with the world — without this reset the next world's
-        // ghost would skip adoption forever and degrade to the flat tint (2026-07-22 review)
+        // ghost would skip adoption forever and degrade to the flat tint
         _ghostVanillaMat = false;
     }
 
-    /// <summary>Snap capture zone: max sideways distance (m) from the string for a placement to
-    /// be pulled onto it; beyond that the build is unrelated — leave it vanilla.</summary>
-    private const float SnapRadius = 2.0f;
-    /// <summary>How far (m) past a stake the snap zone extends along the line.</summary>
-    private const float SnapEndMargin = 1.0f;
+    // Capture zone, set by the player in the mod menu. It started at a fixed 2m sideways, which was
+    // far too greedy: every ground placement within arm's reach of the cord got pulled onto it, so
+    // you could not put anything down beside a standing line.
+    private static float SnapRadius => MasonLineConfig.Radius;
+    private static float SnapEndMargin => MasonLineConfig.EndMargin;
 
     /// <summary>Project only if the point is actually NEAR a strung segment (within
     /// <see cref="SnapRadius"/> sideways and between the stakes ±<see cref="SnapEndMargin"/>).
@@ -517,10 +519,10 @@ internal static class GuideLine
             if (m == null)
             {
                 // fresh world: the static AND the material asset are unloaded until the game spawns a
-                // vanilla structure ghost (eval probe 2026-07-16: matAsset=NULL) — the 'white ghost'
+                // vanilla structure ghost (eval probe: matAsset=NULL) — the 'white ghost'
                 // regression. But the SHADER is always findable, and the StructuresGhostPass picks
                 // renderers by shader, so a shader-built material should get the same blueprint look
-                // (applied cleanly via eval in a fresh world 2026-07-17; exact look pending eye-check —
+                // (applied cleanly via eval in a fresh world; exact look pending eye-check —
                 // shader defaults may differ from the asset's tuned properties).
                 var sh = Shader.Find("Sons/Outline/StructuresGhostHLSL");
                 if (sh == null) return;
@@ -533,7 +535,7 @@ internal static class GuideLine
         catch { }
     }
 
-    // ---- rope: one continuous tube mesh along a catenary ----
+    // ---- rope: one continuous tube mesh along the sagging curve ----
 
     private static void BuildRope(Line line)
     {
@@ -566,7 +568,7 @@ internal static class GuideLine
         // 2) taut-string envelope = UPPER CONVEX HULL over (distance, height) of tie points +
         // ground samples. A real stretched cord hangs in straight runs and breaks ONLY over crests
         // that actually push into it — the old per-sample ground-hug read as "the rope lies down
-        // the whole slope" between uneven anchors (user 2026-07-18).
+        // the whole slope" between uneven anchors.
         var e = new float[segs + 1];
         for (int i = 0; i <= segs; i++) e[i] = i == 0 ? tieA.y : i == segs ? tieB.y : g[i];
         var hull = new System.Collections.Generic.List<int> { 0 };
@@ -600,7 +602,7 @@ internal static class GuideLine
         }
 
         // 4) corner rounding: a ROUNDED hummock contributes several close hull vertices whose short
-        // chords read as visible kinks (user screenshot 2026-07-18); a sharp rock edge (one vertex)
+        // chords read as visible kinks (user screenshot); a sharp rock edge (one vertex)
         // is fine. Two Chaikin passes bend the cord smoothly, then re-clamp so cut corners don't
         // dip into the crest they were cut from.
         path = Chaikin(path);
@@ -634,7 +636,6 @@ internal static class GuideLine
         line.KnotB = MakeKnot("MasonLineKnotB", tieB, line.Dir);
     }
 
-    /// <summary>Build one smooth tube mesh (world-space) following a path; smooth normals = no seams.</summary>
     /// <summary>Open-polyline Chaikin corner-cutting, endpoints pinned (the knots must stay tied to
     /// the stakes). Two passes ≈ quarter-circle rounding of every kink; point count ~4x.</summary>
     private static Vector3[] Chaikin(Vector3[] pts)
@@ -659,7 +660,7 @@ internal static class GuideLine
 
     /// <summary>Ground height under a rope sample — nearest STATIC hit only. The plain Raycast
     /// version returned whatever crossed the ray at build time and baked it into the tube — user
-    /// 2026-07-18: a passing squirrel left its silhouette in the string. Anything with an attached
+    ///: a passing squirrel left its silhouette in the string. Anything with an attached
     /// Rigidbody (animals, players, dropped props) is not ground.</summary>
     private static bool TryGroundY(Vector3 pt, out float y)
     {
@@ -775,7 +776,7 @@ internal static class GuideLine
     private static void PlaceStake(GameObject stake, Vector3 ground)
     {
         stake.transform.position = ground + Vector3.up * (StakeHeight * 0.5f);
-        // rotation is set once in EnsureStake (upright for branch, identity for the cylinder fallback)
+        // rotation is set once in CreateStake (upright for branch, identity for the cylinder fallback)
     }
 
     /// <summary>Ghost = a translucent copy of the branch stake at the aim point.</summary>

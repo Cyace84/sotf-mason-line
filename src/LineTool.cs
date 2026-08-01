@@ -19,7 +19,24 @@ namespace MasonLine;
 /// </summary>
 internal static class LineTool
 {
-    public const int ItemId = 9417;                 // free range, far above vanilla (max ~726)
+    /// <summary>Inventory id the kit is registered under. Well above the vanilla range (max ~726),
+    /// but nothing stops another mod from picking the same number, so the player can move ours. Read
+    /// once at startup: changing it mid-session would strand everything already counted under the
+    /// old id.</summary>
+    public static int ItemId { get; private set; } = MasonLineConfig.DefaultItemId;
+
+    /// <summary>ItemData name we stamp on our own item, and the way we tell it apart from a foreign
+    /// item that happens to sit on the same id.</summary>
+    internal const string ItemName = "MasonLine";
+
+    internal static void ApplyConfig()
+    {
+        ItemId = MasonLineConfig.ItemIdValue;
+        if (MasonLineConfig.ItemIdRejected)
+            RLog.Warning($"[MasonLine] custom item id '{MasonLineConfig.ItemId?.Value}' is not a " +
+                         $"whole number above {MasonLineConfig.MinItemId}; using {ItemId} instead");
+    }
+
     private const int TemplateItemId = 529;         // GPSLocator
     private const int StickId = 392;
     private const int RopeId = 403;
@@ -36,14 +53,14 @@ internal static class LineTool
     private static Sons.Inventory.InventoryLayoutItemGroup? _invGroup;
     private static readonly System.Collections.Generic.List<MeshOutliner> _invOutliners = new();
 
-    // Hover-wobble pose, user-tuned 2026-07-16 (tune.sh: `wob 0 0 90  90 10 0` + `wobpivot -0.37`).
+    // Hover-wobble pose, user-tuned (tune.sh: `wob 0 0 90  90 10 0` + `wobpivot -0.37`).
     // The wobble clip is shared by all items and tilts around the group origin; the frame roll (Z=90)
     // aims the tilt, the StakeVisual offset moves the stick OFF the pivot so one end lifts axe-style
     // instead of see-sawing. Values are the SETTLED LOCALS read live with the backpack open
     // (eval bake_1784156854) — never bake world-space poses computed at load time (lesson: twisted
-    // stick + I-key crash on 2026-07-15). Applied ONCE per backpack opening, ~0.75 s in, so the
+    // stick + I-key crash on). Applied ONCE per backpack opening, ~0.75 s in, so the
     // layout animation has finished and we never fight it per-frame.
-    private static readonly Vector3 InvGroupPos = new(1.20f, 0.02f, 0.45f);   // 2026-07-16 user re-fix: the anchor-derived (1.0868,0.0126,0.6592) sat ~7 cm left on a virgin session; eyes > anchors
+    private static readonly Vector3 InvGroupPos = new(1.20f, 0.02f, 0.45f);   // hand-tuned: the anchor-derived (1.0868,0.0126,0.6592) sat ~7 cm left on a virgin session; eyes > anchors
     private static readonly Vector3 InvGroupEuler = new(0f, 0f, 90f);
     private static readonly Vector3 InvStakePos = new(-0.0452f, -0.0010f, 0.3672f);
     private static readonly Vector3 InvStakeEuler = new(0f, 262.98f, 269.85f);
@@ -59,7 +76,7 @@ internal static class LineTool
         {
             // dev fallback ONLY when setup actually FAILED. Before setup completes (world still
             // loading) this must be FALSE — the old blanket "!Ready => held" made the ghost stake
-            // flash in front of the player for the first seconds of every load (user 2026-07-18).
+            // flash in front of the player for the first seconds of every load.
             if (!Ready) return _setupFailed;
             try
             {
@@ -85,7 +102,7 @@ internal static class LineTool
             if (data == null) { RLog.Error("[MasonLine] item data missing after registration"); return; }
 
             // Per-world work: the inventory/crafting UI + player props are scene objects.
-            var builder = new ItemTools.ItemBuilder(BuildModelPrefab("BuildersLineInvModel"), data);
+            var builder = new ItemTools.ItemBuilder(BuildModelPrefab("MasonLineInvModel"), data);
 
             // SDK AddInventoryItem() with NO position clones the DevilsClub(449) group and never sets
             // localPosition -> our group lands ON TOP of DevilsClub in the herbs area, buried/invisible
@@ -109,29 +126,46 @@ internal static class LineTool
         }
     }
 
-    // ---- kit economy (user-approved design 2026-07-16): one craft = one kit = one active line,
+    // ---- kit economy (user-approved design): one craft = one kit = one active line,
     // unlimited length, NO ingredient burn. Physicality: while the line stands in the world the kit
     // is OUT of the inventory (RemoveItem instantDestroy:true — the same flag the game itself uses
     // for placement-consume, memento-mori flag telemetry); collecting the line (hold Dismantle) returns it.
     // A marker file survives a game restart so a saved-with-line-out inventory gets the kit back
     // (the line itself is not in the save). Signatures observed: PlayerInventory.AddItem/RemoveItem/
-    // AmountOf decompile 2026-07-16.
-    private static int _kitsOut;   // kits currently staked out as standing lines (multi-line 2026-07-17)
+    // AmountOf decompile.
+    private static int _kitsOut;   // kits currently staked out as standing lines
+    // UserData is where RedLoader mods keep their own files; persistentDataPath is the game's save
+    // folder and has no business holding ours.
     private static string KitMarkerPath =>
-        System.IO.Path.Combine(Application.persistentDataPath, "MasonLine.line-out");
+        System.IO.Path.Combine(RedLoader.Utils.LoaderEnvironment.UserDataDirectory, "MasonLine.line-out");
+
+    /// <summary>The marker used to live in the save folder. Move it once, so a kit staked out before
+    /// this update is still refunded instead of silently lost.</summary>
+    private static void MigrateMarkerFromSaveFolder()
+    {
+        try
+        {
+            var old = System.IO.Path.Combine(Application.persistentDataPath, "MasonLine.line-out");
+            if (!System.IO.File.Exists(old) || System.IO.File.Exists(KitMarkerPath)) return;
+            System.IO.File.Copy(old, KitMarkerPath);
+            System.IO.File.Delete(old);
+            RLog.Msg($"[MasonLine] moved the kit marker to {KitMarkerPath}");
+        }
+        catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit marker move failed: {ex.Message}"); }
+    }
 
     /// <summary>SdkEvents.OnWorldExited (quit to menu): lines are NOT in the save and must not leak
-    /// into the next world — DDoL carried them across reloads => user-repro'd kit dupe 2026-07-17.</summary>
+    /// into the next world — DDoL carried them across reloads => user-repro'd kit dupe.</summary>
     public static void OnWorldExited()
     {
         GuideLine.ResetWorld();
         _kitsOut = 0;
         // New Game does not go through SaveGameManager.Load, so a stale id from the slot we just quit
         // would make THAT slot's marker match and hand out a free kit in the fresh world (and, since
-        // markers are kept, again in the original slot = dupe). Review 2026-07-27, defect #3.
+        // markers are kept, again in the original slot = dupe).
         _loadedSaveId = 0;
         // per-world pipeline state: without this, menu-time Ticks kept scanning dead scene objects
-        // (Ready stayed true) and the doc on Ready ("for this world") was a lie (2026-07-22 review)
+        // (Ready stayed true) and the doc on Ready ("for this world") was a lie
         Ready = false;
         _invItem = null;
         _invGroup = null;
@@ -142,7 +176,7 @@ internal static class LineTool
 
     // Save-slot id source: GameSetupManager.GetSelectedSaveId() is only valid in the LOAD MENU —
     // during an in-game save it returns 0 (observed: marker "0 1", refund missed, kit lost — user
-    // repro 2026-07-18). The dir argument of SaveGameManager.Save/Load ends in the numeric save id
+    // repro). The dir argument of SaveGameManager.Save/Load ends in the numeric save id
     // (…/SinglePlayer/<id>), so BOTH sides parse the id from the same source: the path.
     private static uint _loadedSaveId;   // id of the save the current world was loaded from (0 = new game)
 
@@ -171,7 +205,7 @@ internal static class LineTool
             uint id = ParseSaveIdFromDir(dir);
             // Rewrite OUR slot's line only. A single global line meant saving slot B overwrote slot
             // A's pending refund, so loading A found no marker and the staked-out kit was gone for
-            // good (review 2026-07-27, defect #2). The delete branch already knew this and compared
+            // good. The delete branch already knew this and compared
             // ids; the write branch did not.
             var lines = ReadMarkerLines();
             lines.RemoveAll(l => SlotOfMarkerLine(l) == id);
@@ -280,6 +314,7 @@ internal static class LineTool
         _kitsOut = 0;
         try
         {
+            MigrateMarkerFromSaveFolder();
             var lines = ReadMarkerLines();
             if (lines.Count == 0) return;
             var inv = LocalPlayer.Inventory;
@@ -323,20 +358,58 @@ internal static class LineTool
         catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit marker restore failed: {ex.Message}"); }
     }
 
-    /// <summary>Register the ItemData BEFORE the save deserializes. ROOT CAUSE (2026-07-22, user
-    /// lost a saved kit): inventory deserialization runs during world load, but RegisterItemOnce
-    /// used to run only at OnAfterSpawn (Latest.log 2026-07-22: "DESERIALIZING" 05:24:22 vs
-    /// "Mason Line ready" 05:24:27) — an ItemId the database doesn't know at deserialize time
+    /// <summary>Register the ItemData BEFORE the save deserializes, or a stored kit is lost.
+    /// Inventory deserialization runs during world load, and registration used to happen later, at
+    /// OnAfterSpawn — an ItemId the database does not know at deserialize time
     /// is silently DROPPED from the loaded inventory (save file had ItemBlock 9417, in-game
     /// inventory came up without it, zero kit log lines). In-process world reloads were immune
     /// (ItemData already registered from the first spawn), only a COLD game start lost the kit.
     /// Called from OnSdkInitialized (title) and from the SaveGameManager.Load prefix (last line of
     /// defence, fires right before deserialize). Spawn-time Setup stays as the fallback.</summary>
+    /// <summary>Is the item currently sitting on our id actually ours? Compared by the name we stamp
+    /// on it, since the id alone proves nothing.</summary>
+    private static bool OwnsRegisteredItem()
+    {
+        try
+        {
+            var data = ItemDatabaseManager.ItemById(ItemId);
+            return data != null && data._name == ItemName;
+        }
+        catch { return false; }
+    }
+
+    private static bool _conflictReported;
+
+    /// <summary>Another mod owns our item id. Say so once, loudly, with the fix: the mod menu can
+    /// move ours. Staying quiet here is what turns a collision into "my kit does nothing".</summary>
+    private static void ReportItemIdConflict()
+    {
+        if (_conflictReported) return;
+        _conflictReported = true;
+        string other = "another mod";
+        try
+        {
+            var data = ItemDatabaseManager.ItemById(ItemId);
+            if (data != null && !string.IsNullOrEmpty(data._name)) other = $"'{data._name}'";
+        }
+        catch { }
+        RLog.Error($"[MasonLine] item id {ItemId} is already taken by {other}. Mason Line will not " +
+                   "register its kit, to avoid corrupting that item. Pick a different Item id in the " +
+                   "Mason Line settings and restart the game.");
+    }
+
     internal static void TryRegisterEarly(string context)
     {
         try
         {
-            if (ItemTools.IsItemRegistered(ItemId)) return;
+            // IsItemRegistered only answers "an item with this id exists", not "it is ours". If
+            // another mod got there first we must NOT carry on: every AmountOf/AddItem/RemoveItem
+            // below would silently operate on THEIR item.
+            if (ItemTools.IsItemRegistered(ItemId))
+            {
+                if (!OwnsRegisteredItem()) ReportItemIdConflict();
+                return;
+            }
             if (ItemDatabaseManager._itemsCache == null || ItemDatabaseManager._instance == null)
             {
                 RLog.Msg($"[MasonLine] item DB not ready at {context}, deferring registration");
@@ -360,19 +433,23 @@ internal static class LineTool
     /// <summary>App-lifetime work: ItemData + held template survive world reloads (DontDestroyOnLoad).</summary>
     private static void RegisterItemOnce()
     {
-        if (ItemTools.IsItemRegistered(ItemId)) return;
+        if (ItemTools.IsItemRegistered(ItemId))
+        {
+            if (!OwnsRegisteredItem()) ReportItemIdConflict();
+            return;
+        }
 
         var tpl = ItemDatabaseManager.ItemById(TemplateItemId);
         var data = Object.Instantiate(tpl);
-        data.name = "BuildersLineItemData";
+        data.name = "MasonLineItemData";
         data._id = ItemId;
-        data._name = "BuildersLine";
-        data._editorName = "BuildersLine";
+        data._name = ItemName;
+        data._editorName = ItemName;
         // maxAmount MUST be >1: at 1, a second craft overflows and DROPS the item as a world
         // pickup. The dropped pickup carries ObjectPhysicsInteractionSfx; when it rests on the
         // non-convex BackpackGroundMesh hull the game's TryTriggerHardSurfaceImpact -> ClosestPoint
         // throws a managed exception inside the native physics callback -> NATIVE CRASH under
-        // IL2CPP/Wine (crash 2026-07-13, Player.log ReportContacts/ClosestPoint spam). Raising this
+        // IL2CPP/Wine (crash, Player.log ReportContacts/ClosestPoint spam). Raising this
         // makes the overflow-drop far rarer; BuildPickupTemplate also strips the crash component.
         data._maxAmount = 20;
         data._uiData._itemId = ItemId;
@@ -404,7 +481,7 @@ internal static class LineTool
         var clone = Object.Instantiate(src);
         src.SetActive(wasActive);
 
-        clone.name = "BuildersLineHeld";
+        clone.name = "MasonLineHeld";
         Object.DontDestroyOnLoad(clone);
 
         foreach (var c in clone.GetComponents<Component>())
@@ -432,7 +509,7 @@ internal static class LineTool
     /// (BackpackGroundMesh partial hull); the managed throw crosses the native physics callback and
     /// native-crashes the game under IL2CPP/Wine. Decompile: Sons.Gameplay.ObjectPhysicsInteractionSfx.
     /// Verified crash trace: Player.log OnSceneContact -> ReportContacts -> TryTriggerHardSurfaceImpact
-    /// -> "Physics.ClosestPoint can only be used with ... convex MeshCollider" (2026-07-13).</summary>
+    /// -> "Physics.ClosestPoint can only be used with... convex MeshCollider".</summary>
     private static Transform? BuildPickupTemplate(Transform? gpsPickup)
     {
         if (gpsPickup == null) return null;
@@ -442,7 +519,7 @@ internal static class LineTool
         var clone = Object.Instantiate(src);
         src.SetActive(wasActive);
 
-        clone.name = "BuildersLinePickup";
+        clone.name = "MasonLinePickup";
         Object.DontDestroyOnLoad(clone);
         StripImpactSfx(clone);
 
@@ -470,7 +547,7 @@ internal static class LineTool
     /// 0x1831E8DA0) wires Inventory layer + MouseEventsProxy onto every renderer GO itself, but it
     /// expects a COLLIDER to already exist on the renderable for hover/click raycasts. A TRIGGER
     /// collider is mandatory — a plain one physically contacts BackpackGroundMesh and the contact-
-    /// SFX spam crashes the game (crash 2026-07-12).</summary>
+    /// SFX spam crashes the game (crash).</summary>
     private static GameObject BuildModelPrefab(string name)
     {
         var root = new GameObject(name);
@@ -531,8 +608,8 @@ internal static class LineTool
             if (keepTriggerCollider)
             {
                 // thin capsule hugging the branch. A primitive's default radius 0.5/height 2 would blow up
-                // into a ~1m dead-zone that blocks selecting neighbouring items; a TRIGGER (not solid) avoids
-                // the BackpackGroundMesh contact-SFX crash.
+                // into a ~1m dead-zone that blocks selecting neighbouring items. It stays SOLID rather
+                // than a trigger; the reason is at the isTrigger assignment below.
                 var cap = stake.AddComponent(Il2CppInterop.Runtime.Il2CppType.Of<CapsuleCollider>()).TryCast<CapsuleCollider>();
                 if (cap != null)
                 {
@@ -601,9 +678,9 @@ internal static class LineTool
     }
 
     // Crafting-result pose: the SAME shared model prefab is instantiated under the crafting-mat result
-    // frame (…/CraftingSystem/CraftingResultLayoutGroups/BuildersLineLayoutGroup/HealthMixCrafting-
-    // ResultLayoutItem/BuildersLineInvModel(Clone)) — a different parent chain than the backpack layout
-    // item, so the backpack-approved local euler reads crooked there. Live-tuned 2026-07-16
+    // frame (…/CraftingSystem/CraftingResultLayoutGroups/MasonLineLayoutGroup/HealthMixCrafting-
+    // ResultLayoutItem/MasonLineInvModel(Clone)) — a different parent chain than the backpack layout
+    // item, so the backpack-approved local euler reads crooked there. Live-tuned
     // (tune.sh mat 90 0 85, user-approved "вот это четкое"): world (90,0,85) resolves to this LOCAL
     // under the craft frame. Scale stays 1.4 (prefab). Set-once per clone is enough: matshow showed the
     // baked local UNTOUCHED on a live craft popup — nothing animates StakeVisual locals.
@@ -630,7 +707,7 @@ internal static class LineTool
             t.localEulerAngles = CraftDisplayEuler;
             _craftPosedId = id;
             // a new clone appeared => a new CustomItemRenderable may exist un-fixed; flag+sanitize it
-            // BEFORE its next SetItemInstance (poison) or OnEnable (detonation). 2026-07-16 crash window.
+            // BEFORE its next SetItemInstance (poison) or OnEnable (detonation). crash window.
             FixRenderableLoadedFlags();
             Dbg.Msg(System.ConsoleColor.Cyan, $"[MasonLine] craft-mat pose applied (SV {id})");
             return;
@@ -721,15 +798,13 @@ internal static class LineTool
     /// UnityEventBase.AddCall on managed-injected renderables. Result: AddItem of the crafted item
     /// fails, the fallback DropItem NREs in TransferOnRenderableLoadedCallbackFrom, the item VANISHES.
     /// Setting the field flips SetItemInstance onto the direct "already loaded" path.
-    /// Live-verified 2026-07-15 (craft → stash → in backpack, user-confirmed).
-    ///
-    /// HEISEN-CRASH CURE (root-caused 2026-07-16, ErrorLog.log: AccessViolation at UnityEvent`1.Invoke
-    /// ← CustomItemRenderable.OnEnable): a RankException-interrupted AddCall leaves _onRenderableLoaded's
-    /// native call-list corrupt; OnEnable fires on EVERY inventory open and Invoke then reads garbage →
-    /// native AV (the long-standing 5/7 inventory crash). Cure: REPLACE the event object with a fresh
-    /// empty UnityEvent&lt;Transform&gt; via the interop field setter — never touch the poisoned one (even a
-    /// Clear could walk the corrupt array). Nothing legitimately subscribes: with IsObjectLoaded=true the
-    /// game never takes the listener branch, and the SDK itself never subscribes.</summary>
+    /// Why the event object is replaced rather than cleared: an AddCall that was interrupted
+    /// mid-way leaves the renderable's _onRenderableLoaded call-list in a corrupt state. OnEnable
+    /// fires on every inventory open, Invoke walks that list, and the process dies in native code.
+    /// Clearing the event would walk the same broken array, so we swap in a fresh empty
+    /// UnityEvent&lt;Transform&gt; through the interop field setter and never touch the old one.
+    /// Nothing legitimate is lost: with IsObjectLoaded true the game never takes the listener
+    /// branch, and the SDK does not subscribe either.</summary>
     private static readonly System.Collections.Generic.HashSet<int> _sanitizedRenderables = new();
 
     private static void FixRenderableLoadedFlags()
@@ -737,7 +812,7 @@ internal static class LineTool
         // SURGICAL (lesson: a broad Setup-time sweep marked 3 nodes "loaded" incl. template objects and
         // crashed the game on craft). Only the managed-injected CustomItemRenderable explodes on AddCall —
         // native ItemRenderables (GPS-clone mat/pickup nodes) never needed the fix (mat display worked
-        // un-fixed on 2026-07-15). So: exact component type + the INSTANTIATED model clone only.
+        // un-fixed on). So: exact component type + the INSTANTIATED model clone only.
         var arr = Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<Endnight.Rendering.AssetReferenceRenderable>());
         int patched = 0, sanitized = 0;
         foreach (var o in arr)
@@ -747,7 +822,7 @@ internal static class LineTool
             if (ar.GetIl2CppType().Name != "CustomItemRenderable") continue;
             bool ours = false;
             var p = ar.transform;
-            for (int i = 0; p != null && i < 8; i++) { if (p.name.Contains("BuildersLine")) { ours = true; break; } p = p.parent; }
+            for (int i = 0; p != null && i < 8; i++) { if (p.name.Contains("MasonLine")) { ours = true; break; } p = p.parent; }
             if (!ours) continue;
             var model = FindOurInvModel(ar);
             if (model == null) continue;
@@ -767,7 +842,7 @@ internal static class LineTool
     /// <summary>Replace a renderable's _onRenderableLoaded with a fresh event, once per instance.
     /// Called from the sweep above AND synchronously from <see cref="RenderablePatch"/> before every
     /// CustomItemRenderable.OnEnable — the sweep alone loses the race against clones the game creates
-    /// lazily on the first inventory open (crash 2026-07-17 00:48 despite 'sanitized: 1').</summary>
+    /// lazily on the first inventory open (crash 00:48 despite 'sanitized: 1').</summary>
     internal static bool SanitizeRenderable(Endnight.Rendering.AssetReferenceRenderable ar)
     {
         if (!_sanitizedRenderables.Add(ar.GetInstanceID())) return false;
@@ -778,7 +853,7 @@ internal static class LineTool
     /// <summary>The one place that knows how to locate our injected inventory model under a
     /// CustomItemRenderable (Unity's "(Clone)" suffix + our prefab name). Shared by the sweep and
     /// the crash-site guard so the brittle name-match lives in exactly one spot.</summary>
-    internal const string InvModelCloneName = "BuildersLineInvModel(Clone)";
+    internal const string InvModelCloneName = "MasonLineInvModel(Clone)";
     internal static GameObject? FindOurInvModel(Endnight.Rendering.AssetReferenceRenderable ar)
     {
         foreach (var t in ar.GetComponentsInChildren<Transform>(true))
