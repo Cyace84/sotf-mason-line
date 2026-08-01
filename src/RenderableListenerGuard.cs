@@ -5,15 +5,14 @@ using UnityEngine;
 namespace MasonLine;
 
 /// <summary>
-/// Crash-site guard for the 2026-07-24 04:54 inventory crash — the first one with a NAMED corpse.
+/// Guards the exact instruction that crashed the game when the inventory was opened.
 ///
-/// winedbg backtrace (full, user-provided):
+/// The call path, from a debugger backtrace:
 /// <code>
-///   InputSystem Tap → PlayerInventory::Open → InventoryCutscene::Play → Cutscene::Play
-///   → LayoutItem::SetItemInstance → InventoryLayoutItem::Initialize → LayoutItem::Initialize
-///   → ItemInstance::RefreshItemObject
-///   → AssetReferenceRenderable::AddOnRenderableLoadedListener (+0x1b0)
-///   → UnityEventBase::AddCall (+0x46)   CRASH: `incl 0x1c(%rcx)`, rcx=0x1f40 (garbage near-null)
+///   PlayerInventory::Open → InventoryCutscene::Play → LayoutItem::SetItemInstance
+///   → InventoryLayoutItem::Initialize → ItemInstance::RefreshItemObject
+///   → AssetReferenceRenderable::AddOnRenderableLoadedListener
+///   → UnityEventBase::AddCall     dies writing through a near-null pointer
 /// </code>
 ///
 /// Root cause: SDK's managed-injected <c>ItemTools.CustomItemRenderable</c> has a
