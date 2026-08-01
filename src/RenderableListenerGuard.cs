@@ -51,17 +51,22 @@ internal static class RenderableListenerCrashGuard
 
         var loaded = __instance._cachedLoadedObject;
 
-        // COLD clone: prefix won the race against the 1/30 sweep — model not cached yet. Self-heal by
-        // caching the child model right here (same action the sweep does) so the callback still gets a
-        // real Transform instead of being dropped. Proven unreproducible by hand (two aggressive
-        // craft+inventory-spam sessions, 0 hits) — kept as by-construction safety, silent in release.
+        // Nothing cached yet. Either our own clone got here before the sweep did, in which case the
+        // model is already a child and we can cache it ourselves, or this renderable belongs to some
+        // other SDK mod: CustomItemRenderable is the SDK's type, so every mod's custom item lands in
+        // this prefix, not just ours.
         if (loaded == null)
         {
             loaded = LineTool.FindOurInvModel(__instance);
             if (loaded != null) __instance._cachedLoadedObject = loaded;
             Dbg.Msg(System.ConsoleColor.Magenta,
-                $"[MasonLine] listener-guard: COLD clone (sweep lost race) on '{__instance.name}' " +
-                $"-> self-healed model={(loaded != null ? loaded.name : "NOT-FOUND")}");
+                $"[MasonLine] listener-guard: no cached model on '{__instance.name}' " +
+                $"-> {(loaded != null ? "self-healed " + loaded.name : "not ours")}");
+
+            // Not our item. The event has been replaced with a fresh one above, so AddCall is safe
+            // now; let the original run and register the other mod's callback properly. Swallowing
+            // it here would leave their model waiting for a notification that never comes.
+            if (loaded == null) return true;
         }
 
         if (_handled < 8)
