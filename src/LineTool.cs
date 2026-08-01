@@ -544,6 +544,9 @@ internal static class LineTool
         if (safePickup != null) data._pickupPrefab = safePickup;
 
         ItemTools.RegisterItem(data);
+        // RegisterItem seeds the active locale's table with the English title; overwrite that and
+        // fill in the other languages.
+        MasonLineStrings.Apply(ItemId);
     }
 
     /// <summary>Clone the GPS held prefab (inactive-clone trick so no GPS Awake runs), strip the
