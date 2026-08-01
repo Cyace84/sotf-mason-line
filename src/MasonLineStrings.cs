@@ -12,8 +12,16 @@ namespace MasonLine;
 /// The SDK already writes one translation entry when an item is registered, but only into the table
 /// of the locale that happens to be active, and it builds the plural by sticking an "s" on the end.
 /// In a Russian game that leaves an English name with an English plural sitting in the inventory.
-/// So we write our own entries into EVERY locale's table instead, under the keys the SDK chose:
-/// I_&lt;itemId&gt;, I_&lt;itemId&gt;_PLURAL and I_&lt;itemId&gt;_DESC.
+/// So we write our own entries under the keys the SDK chose: I_&lt;itemId&gt;, I_&lt;itemId&gt;_PLURAL
+/// and I_&lt;itemId&gt;_DESC.
+///
+/// Those entries do not survive a language change. Switching language runs
+/// LocalizedDatabase.OnLocaleChanged, which calls ReleaseAllTables: every table is dropped and later
+/// reloaded from the game's own assets, where our keys do not exist. The item then has no name at
+/// all — the lookup misses and returns an empty string rather than falling back. So the entries are
+/// rewritten whenever the selected locale turns out to be a different one; the mod's own tick does
+/// the watching, because it runs after the release, while the ordering of the locale-changed event
+/// against that release is not something we can prove.
 ///
 /// A mason line is a real tool with a real name in most languages, so these are the trade terms as
 /// they appear on hardware store sites in each country, not word-for-word translations. Languages
@@ -68,55 +76,71 @@ internal static class MasonLineStrings
             "釘下兩根樁，在兩樁之間拉緊線。自由放置的原木會自動對齊到這條線上。"),
     };
 
-    /// <summary>Writes the item's strings into every locale the game offers. Called once, right after
-    /// the item is registered, so the tables are ready before any inventory UI is built and switching
-    /// language mid-game needs no extra work.</summary>
+    private static int _itemId;
+    private static string _writtenFor = "";
+    private static float _nextCheck;
+    private static int _repairsLogged;
+
+    /// <summary>Called once, right after the item is registered.</summary>
     internal static void Apply(int itemId)
+    {
+        _itemId = itemId;
+        WriteForSelectedLocale();
+    }
+
+    /// <summary>Called from the mod tick. Rewrites the entries when the player has switched to a
+    /// language we have not written since — that is also the case after switching away and back,
+    /// because the table was released in the meantime.</summary>
+    internal static void CheckLocale()
+    {
+        if (UnityEngine.Time.unscaledTime < _nextCheck) return;
+        _nextCheck = UnityEngine.Time.unscaledTime + 0.5f;
+        WriteForSelectedLocale();
+    }
+
+    private static void WriteForSelectedLocale()
     {
         try
         {
-            var provider = LocalizationSettings.AvailableLocales;
-            var locales = provider?.Locales;
-            if (locales == null || locales.Count == 0)
-            {
-                RLog.Warning("[MasonLine] no locales available; the item keeps the SDK's English name");
-                return;
-            }
+            var locale = LocalizationSettings.SelectedLocale;
+            if (locale == null) return;
 
-            string key = $"I_{itemId}";
-            int done = 0;
-            var missing = new List<string>();
+            string code = (locale.Identifier.Code ?? "").ToLowerInvariant();
+            if (code.Length == 0) return;
 
-            for (int i = 0; i < locales.Count; i++)
-            {
-                var locale = locales[i];
-                if (locale == null) continue;
-                string code = (locale.Identifier.Code ?? "").ToLowerInvariant();
-                // Full code first: zh-Hant and zh-Hans differ in script, and matching on "zh" alone
-                // would hand Taiwan the simplified characters.
-                if (!ByLanguage.TryGetValue(code, out var text) &&
-                    !ByLanguage.TryGetValue(code.Split('-')[0], out text))
-                {
-                    missing.Add(code);
-                    text = ByLanguage["en"];
-                }
+            // Full code first: zh-Hant and zh-Hans differ in script, and matching on "zh" alone
+            // would hand Taiwan the simplified characters.
+            bool translated = ByLanguage.TryGetValue(code, out var text) ||
+                              ByLanguage.TryGetValue(code.Split('-')[0], out text);
+            if (!translated) text = ByLanguage["en"];
 
-                // GetTable with an explicit locale, not LocalizationTools.ItemsTable: that property
-                // hands back the ACTIVE locale's table, which is exactly the limitation we are here
-                // to fix. Same casts the SDK uses — interop generics need the trip through object.
-                var table = ((LocalizedDatabase<StringTable, StringTableEntry>)(object)
-                    LocalizationSettings.StringDatabase).GetTable((TableReference)"Items", locale);
-                if (table == null) continue;
+            // GetTable with an explicit locale, not LocalizationTools.ItemsTable: that property
+            // hands back the ACTIVE locale's table, which is the limitation we are here to fix.
+            // Same casts the SDK uses — interop generics need the trip through object.
+            var table = ((LocalizedDatabase<StringTable, StringTableEntry>)(object)
+                LocalizationSettings.StringDatabase).GetTable((TableReference)"Items", locale);
+            if (table == null) return;   // not loaded yet; the next tick tries again
 
-                var detailed = (DetailedLocalizationTable<StringTableEntry>)(object)table;
-                detailed.AddEntry(key, text.Title);
-                detailed.AddEntry(key + "_PLURAL", text.Plural);
-                detailed.AddEntry(key + "_DESC", text.Description);
-                done++;
-            }
+            string key = $"I_{_itemId}";
+            var detailed = (DetailedLocalizationTable<StringTableEntry>)(object)table;
 
-            RLog.Msg($"[MasonLine] item strings written for {done} locale(s)" +
-                     (missing.Count > 0 ? $"; English used for: {string.Join(", ", missing)}" : ""));
+            // Read what is actually under the key instead of trusting that our last write survived.
+            // Two things overwrite it: the table is thrown away and reloaded from the game's assets
+            // on every language change, and the SDK seeds the key with its own English title when
+            // the item is registered, which can land after us during startup.
+            var entry = detailed.GetEntry(key);
+            if (entry != null && entry.Value == text.Title) { _writtenFor = code; return; }
+
+            detailed.AddEntry(key, text.Title);
+            detailed.AddEntry(key + "_PLURAL", text.Plural);
+            detailed.AddEntry(key + "_DESC", text.Description);
+
+            bool sameLocale = code == _writtenFor;
+            _writtenFor = code;
+            if (!sameLocale || _repairsLogged++ < 5)
+                RLog.Msg($"[MasonLine] item name for {code}: {text.Title}" +
+                         (translated ? "" : " (no translation for this language, English used)") +
+                         (sameLocale ? " (rewritten, the table had been reloaded)" : ""));
         }
         catch (System.Exception ex)
         {

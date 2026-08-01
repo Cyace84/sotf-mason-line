@@ -100,6 +100,8 @@ public class MasonLineMod : SonsMod
     private void Tick()
     {
         if (!_guardVerified) { _guardVerified = true; VerifyCrashGuardInstalled(); }
+        // A language switch releases every string table, our item's name included, so watch for it.
+        MasonLineStrings.CheckLocale();
         bool held = LineTool.IsHeld;
         // gameplay = mouse captured; while any UI (inventory/book/pause) owns the cursor, clicks
         // must not plant stakes
