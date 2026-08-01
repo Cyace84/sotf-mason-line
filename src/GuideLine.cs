@@ -148,6 +148,11 @@ internal static class GuideLine
             return;
         }
 
+        // The kit pays for the line, so take it BEFORE anything is built. Paying afterwards meant a
+        // failed RemoveItem left a working line standing that no kit had bought and that collecting
+        // could not refund.
+        if (!LineTool.ConsumeKit()) return;
+
         var line = new Line
         {
             Origin = _pointA,
@@ -165,7 +170,6 @@ internal static class GuideLine
         PlayPlaceSound(p);
         BuildRope(line);
         _lines.Add(line);
-        LineTool.ConsumeKit();   // kit economy: the placed line IS the kit — it leaves the inventory
         RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] string line #{_lines.Count} set, {line.SegLen:0.0}m. Logs placed near it snap on (hold Dismantle on a stake to collect)");
     }
 

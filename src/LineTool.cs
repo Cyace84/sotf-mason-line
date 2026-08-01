@@ -181,6 +181,9 @@ internal static class LineTool
         _invOutliners.Clear();
         _craftRoot = null;
         _poseFrames = -1;
+        // Unity recycles instance ids, so a stale set would make us skip sanitizing a NEW renderable
+        // that happens to reuse a dead id.
+        _sanitizedRenderables.Clear();
     }
 
     // Save-slot id source: GameSetupManager.GetSelectedSaveId() is only valid in the LOAD MENU —
@@ -316,22 +319,29 @@ internal static class LineTool
     }
 
     /// <summary>Line completed (stake B planted): take ONE kit out of the inventory. Several kits
-    /// = several simultaneous lines. No-op when the pipeline is down (dev fallback).</summary>
-    public static void ConsumeKit()
+    /// = several simultaneous lines. False means nothing was taken and the line must not be built,
+    /// or the player would keep the kit AND get the line.</summary>
+    public static bool ConsumeKit()
     {
-        if (!Ready) return;
+        if (!Ready) return false;
         try
         {
             var inv = LocalPlayer.Inventory;
-            if (inv == null) return;
+            if (inv == null) return false;
             if (inv.RemoveItem(ItemId, 1, false, true, true, null, true))
             {
                 _kitsOut++;
                 RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] kit staked out ({_kitsOut} in the field). Collect the line (hold Dismantle) to get it back");
+                return true;
             }
-            else RLog.Warning("[MasonLine] kit consume failed (RemoveItem=false), line placed anyway");
+            RLog.Warning("[MasonLine] the kit could not be taken from the pack, so no line was set");
+            return false;
         }
-        catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit consume failed: {ex.Message}"); }
+        catch (System.Exception ex)
+        {
+            RLog.Warning($"[MasonLine] the kit could not be taken from the pack: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>One line collected/cleared: put ONE kit back. Gated by the out-counter, so a C on
@@ -542,9 +552,12 @@ internal static class LineTool
     {
         var src = gpsHeld.gameObject;
         bool wasActive = src.activeSelf;
-        src.SetActive(false);                       // restored right after — vanilla GPS unaffected
-        var clone = Object.Instantiate(src);
-        src.SetActive(wasActive);
+        // Cloned inactive so the copy never runs Awake/OnEnable. The finally matters: a throw in
+        // Instantiate would otherwise leave the game's own GPS template switched off for good.
+        GameObject clone;
+        src.SetActive(false);
+        try { clone = Object.Instantiate(src); }
+        finally { src.SetActive(wasActive); }
 
         clone.name = "MasonLineHeld";
         Object.DontDestroyOnLoad(clone);
@@ -580,9 +593,12 @@ internal static class LineTool
         if (gpsPickup == null) return null;
         var src = gpsPickup.gameObject;
         bool wasActive = src.activeSelf;
-        src.SetActive(false);                       // restored right after — vanilla GPS unaffected
-        var clone = Object.Instantiate(src);
-        src.SetActive(wasActive);
+        // Cloned inactive so the copy never runs Awake/OnEnable. The finally matters: a throw in
+        // Instantiate would otherwise leave the game's own GPS template switched off for good.
+        GameObject clone;
+        src.SetActive(false);
+        try { clone = Object.Instantiate(src); }
+        finally { src.SetActive(wasActive); }
 
         clone.name = "MasonLinePickup";
         Object.DontDestroyOnLoad(clone);
