@@ -41,8 +41,9 @@ internal static class MasonLineStrings
             "Clava dos estacas y tensa el hilo entre ellas. Los troncos libres se alinean con él."),
         ["it"] = new("Filo da muratore", "Fili da muratore",
             "Pianta due picchetti e tendi il filo tra loro. I tronchi liberi si allineano ad esso."),
-        ["pt"] = new("Fio de pedreiro", "Fios de pedreiro",
-            "Finque duas estacas e estique o fio entre elas. Os troncos livres se alinham por ele."),
+        // The game ships Brazilian Portuguese only, and Brazil says "linha", not "fio".
+        ["pt"] = new("Linha de pedreiro", "Linhas de pedreiro",
+            "Finque duas estacas e estique a linha entre elas. Os troncos livres se alinham por ela."),
         ["pl"] = new("Sznurek murarski", "Sznurki murarskie",
             "Wbij dwa kołki i naciągnij między nimi sznurek. Swobodnie stawiane kłody ustawiają się wzdłuż niego."),
         ["ja"] = new("水糸", "水糸",
