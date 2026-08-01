@@ -18,7 +18,7 @@ namespace MasonLine;
 /// (<c>OnSceneContact → ReportContacts → TryTriggerHardSurfaceImpact</c>). Under IL2CPP/Wine a
 /// managed exception crossing a native callback native-crashes the process with no managed stack —
 /// Player.log shows only the ClosestPoint warning + this method, spammed, then the game is gone
-/// (crashes 2026-07-12/13).
+/// (the original crash reports).
 ///
 /// Fix: skip the SFX for the exact collider type that would throw. Cost = one unplayed impact
 /// sound on a non-convex surface. Everything else runs vanilla (return true).
@@ -46,16 +46,11 @@ internal static class HardSurfaceImpactCrashGuard
         }
         if (impactCollider == null) return true;
 
-        // WHITELIST (2026-07-24 rewrite). Prior blacklist ("skip non-convex OR vertexCount>256") had a
-        // hole: with the guard PROVABLY live + firing (Latest.log "crash-guard ACTIVE" + skips on
-        // MergedCollisionPart805/936), Player.log STILL logged 21x "ClosestPoint can only be used with
-        // ... convex MeshCollider" from THIS method, stack TryTriggerHardSurfaceImpact←ReportContacts
-        // ←OnSceneContact, right after the BackpackGroundMesh partial-hull cook. So BackpackGroundMesh
-        // reached ClosestPoint despite the guard: it read as convex==true (marked convex, only cooked
-        // partial) and/or sharedMesh.vertexCount was not readable under IL2CPP, so the old sub-check
-        // passed it. Unity's ClosestPoint here LOGS-and-continues (no "swallowed" Finalizer line ever
-        // fired) — the crash is the >1,000,000-line log spam ([ line 1038888 ] collapse) saturating
-        // RLog/Unity I/O under Wine, not a thrown exception.
+        // This used to be a blacklist ("skip non-convex meshes, or ones over 256 verts") and it
+        // leaked: a mesh can report convex==true while only a partial hull was cooked, and vertex
+        // counts are not always readable through IL2CPP, so unsafe colliders slipped past both
+        // sub-checks. Unity does not throw here, it logs and carries on, which is worse: the failure
+        // mode is a log line per contact per frame, millions of them, and the I/O stalls the game.
         //
         // New rule: ClosestPoint is only valid on Box/Sphere/Capsule or a convex, cook-clean Mesh. We
         // cannot cheaply PROVE a mesh cooked clean, so default to SKIP on any uncertainty. Allow SFX
@@ -85,15 +80,25 @@ internal static class HardSurfaceImpactCrashGuard
             _skipped++;
             return false;
         }
-        // Box / Sphere / Capsule (or anything TryCast<MeshCollider> can't see): ClosestPoint-safe.
-        return true;
+        // Allow only the three shapes Physics.ClosestPoint actually supports. An unrecognised
+        // collider type is not evidence of safety: WheelCollider (the golf carts) and
+        // CharacterController both land here and neither is a valid argument.
+        if (impactCollider.TryCast<BoxCollider>() != null) return true;
+        if (impactCollider.TryCast<SphereCollider>() != null) return true;
+        if (impactCollider.TryCast<CapsuleCollider>() != null) return true;
+
+        if (_skipped < 8)
+            Dbg.Msg(System.ConsoleColor.DarkYellow,
+                $"[MasonLine] crash-guard: skipped SFX on unsupported collider '{impactCollider.name}' #{_skipped + 1}");
+        _skipped++;
+        return false;
     }
 
-    // Belt-and-suspenders: the prefix only skips MeshCollider.convex==false, but BackpackGroundMesh is
-    // a PARTIAL HULL — convex==true yet ClosestPoint still throws ("Couldn't create a Convex Mesh ...
-    // within the maximum polygons limit"). Any managed exception escaping this method crosses the
+    // Belt-and-suspenders. The prefix rejects colliders it can recognise as unsafe, but a mesh can
+    // still lie: BackpackGroundMesh is a PARTIAL HULL, convex==true yet ClosestPoint throws anyway
+    // ("Couldn't create a Convex Mesh ... within the maximum polygons limit"). Any managed exception escaping this method crosses the
     // native physics callback and native-crashes the process (crash on clicking an inventory item,
-    // 2026-07-14). A Harmony finalizer that returns null SWALLOWS whatever the body threw, for every
+    //). A Harmony finalizer that returns null SWALLOWS whatever the body threw, for every
     // collider type — the throw never reaches native. Cost = one unplayed impact SFX.
     private static System.Exception? Finalizer(System.Exception? __exception)
     {
