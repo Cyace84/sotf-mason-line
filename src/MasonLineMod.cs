@@ -107,6 +107,14 @@ public class MasonLineMod : SonsMod
         // must not plant stakes
         bool gameplay = Cursor.lockState == CursorLockMode.Locked;
 
+        // A half-defined line may not outlive the tool leaving the hands: left standing, the stake is
+        // invisible state and the next click, minutes later and metres away, strings a line back to
+        // it. This is a STATE rule, not an unequip event — it reads "playing, hands empty".
+        // Opening the backpack counts as well (the held instance is deactivated there while the
+        // cursor stays locked), so a look into the pack pulls the pending stake too. Accepted as-is:
+        // the stake is free until the line completes, so nothing is lost by re-planting it.
+        if (gameplay && !held) GuideLine.CancelPending();
+
         // place a stake = mouse click, like vanilla placement. No mod hotkey.
         if (held && gameplay && Input.GetMouseButtonDown(0))
             GuideLine.DropPoint();

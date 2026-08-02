@@ -422,6 +422,20 @@ internal static class GuideLine
         RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] line collected, {_lines.Count} still standing");
     }
 
+    /// <summary>The tool left the hands with stake A planted and no far end yet. Nothing has been
+    /// paid for it — the kit is only consumed when a line completes — so the stake is simply
+    /// dropped. Left standing it is invisible state: minutes later and metres away the next click
+    /// silently strings a line back to it (user-reported).</summary>
+    public static void CancelPending()
+    {
+        if (!_haveA && _pendingStake == null) return;
+        if (_pendingStake != null) Object.Destroy(_pendingStake);
+        _pendingStake = null;
+        _haveA = false;
+        _aimedPending = false;
+        RLog.Msg(System.ConsoleColor.Yellow, "[MasonLine] stake A pulled: the tool left the hands before the far end was set");
+    }
+
     /// <summary>World unload/load: the lines are NOT part of the save and the stakes are DDoL — left
     /// alone they survive into a reloaded older save whose inventory still holds the kits
     /// (user-repro'd dupe). Destroy every visual, drop all cached scene assets (materials/
