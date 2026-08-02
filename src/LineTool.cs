@@ -37,6 +37,25 @@ internal static class LineTool
                          $"whole number above {MasonLineConfig.MinItemId}; using {ItemId} instead");
     }
 
+    private static bool _idChangePending;
+
+    /// <summary>The settings panel accepts a new item id the moment it is typed, but registration
+    /// happened at startup, so the running session keeps the old one. Without this the player edits
+    /// the id, sees nothing happen, and has no way to tell whether it took (observed: id showed 9424
+    /// in the menu while the session ran on 9417).</summary>
+    internal static void WarnIfIdChangePending()
+    {
+        bool pending = MasonLineConfig.ItemIdValue != ItemId;
+        if (pending == _idChangePending) return;
+        _idChangePending = pending;
+        if (pending)
+            RLog.Warning($"[MasonLine] item id {MasonLineConfig.ItemIdValue} takes effect after a game " +
+                         $"restart; this session still runs on {ItemId}. Kits in the pack are saved under " +
+                         $"{ItemId} and will not carry over, but lines staked out now will come back.");
+        else
+            RLog.Msg($"[MasonLine] item id is back to {ItemId}, the one this session runs on");
+    }
+
     private const int TemplateItemId = 529;         // GPSLocator
     private const int StickId = 392;
     private const int RopeId = 403;
@@ -469,8 +488,8 @@ internal static class LineTool
         }
         catch { }
         RLog.Error($"[MasonLine] item id {ItemId} is already taken by {other}. Mason Line will not " +
-                   "register its kit, to avoid corrupting that item. Pick a different Item id in the " +
-                   "Mason Line settings and restart the game.");
+                   "register its kit, to avoid corrupting that item. Set overrideItemId = true and " +
+                   "itemId to another number in UserData/MasonLine.cfg, then restart the game.");
     }
 
     internal static void TryRegisterEarly(string context)

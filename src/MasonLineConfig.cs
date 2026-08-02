@@ -1,4 +1,5 @@
 using RedLoader;
+using SonsSdk.Attributes;
 using SUI;
 
 namespace MasonLine;
@@ -14,6 +15,7 @@ public static class MasonLineConfig
 {
     public const float DefaultSnapRadius = 0.3f;
     public const float DefaultSnapEndMargin = 0.1f;
+    public const float DefaultStakeMagnet = 0.3f;
     public const int DefaultItemId = 9417;
 
     /// <summary>Floor for a hand-typed id. Vanilla items sit far below this, and an id that lands on
@@ -22,13 +24,20 @@ public static class MasonLineConfig
 
     public static ConfigEntry<float> SnapRadius { get; private set; } = null!;
     public static ConfigEntry<float> SnapEndMargin { get; private set; } = null!;
-    /// <summary>Guards the id below. Off means the default is used no matter what the text box
-    /// says, so a half-typed number cannot take the kit away from a player who was only looking.</summary>
+    public static ConfigEntry<float> StakeMagnet { get; private set; } = null!;
+    /// <summary>Guards the id below. Off means the default is used no matter what the file says, so
+    /// a half-typed number cannot take the kit away from someone who was only looking.
+    ///
+    /// Kept out of the settings panel ([SettingsUiIgnore], honoured by SUI's reflection over this
+    /// class): it is a repair knob for one rare case the log announces by name, and getting it wrong
+    /// costs the player every kit in the pack. A row in the panel invites a poke; a line in
+    /// MasonLine.cfg takes intent.</summary>
+    [SettingsUiIgnore]
     public static ConfigEntry<bool> OverrideItemId { get; private set; } = null!;
 
-    // A string, not an int, on purpose: the settings UI renders int entries as a SLIDER over
-    // 0..10 when no range is set, so an id typed as a number is unreachable and one nudge of the
-    // slider would drop us into the vanilla id range. String entries get a text box.
+    // A string, not an int, on purpose: an int entry in the config file is fine either way, but the
+    // value is hand-edited, and a string keeps a typo a typo instead of a silent 0.
+    [SettingsUiIgnore]
     public static ConfigEntry<string> ItemId { get; private set; } = null!;
 
     public static void Init()
@@ -44,12 +53,17 @@ public static class MasonLineConfig
             "How far beyond each stake the string keeps working, so a wall can end flush with its stake.");
         SnapEndMargin.SetRange(0f, 3f);
 
+        StakeMagnet = cat.CreateEntry("stakeMagnet", DefaultStakeMagnet, "Stake magnet (m)",
+            "Aim the first stake of a new line this close to a standing stake and it lands exactly " +
+            "on it, so corners and continuations share a point. 0 turns the magnet off.");
+        StakeMagnet.SetRange(0f, 2f);
+
         OverrideItemId = cat.CreateEntry("overrideItemId", false, "Use a custom item id",
             $"Leave this off unless the log reports that another mod already owns item id " +
             $"{DefaultItemId}. While it is off, the id below is ignored.");
 
         ItemId = cat.CreateEntry("itemId", DefaultItemId.ToString(), "Custom item id",
-            $"Only used when the box above is ticked. Type a whole number above {MinItemId} and " +
+            $"Only used when the line above is true. Write a whole number above {MinItemId} and " +
             "restart the game. Kits sitting in your pack were saved under the old id and will not " +
             "come back, but kits staked out as lines will: plant your lines, save, then change this.");
     }
@@ -58,6 +72,7 @@ public static class MasonLineConfig
     // built-in values rather than dereferencing a null entry.
     public static float Radius => SnapRadius?.Value ?? DefaultSnapRadius;
     public static float EndMargin => SnapEndMargin?.Value ?? DefaultSnapEndMargin;
+    public static float Magnet => StakeMagnet?.Value ?? DefaultStakeMagnet;
     public static bool OverrideEnabled => OverrideItemId?.Value ?? false;
 
     /// <summary>The typed id, or the default when the override is off, the text is not a number, or

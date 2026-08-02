@@ -121,6 +121,7 @@ public class MasonLineMod : SonsMod
 
         // drive the inventory hover outline (axe-style highlight) from IsHighlighted
         LineTool.UpdateInventoryHover();
+        LineTool.WarnIfIdChangePending();   // the id is read at startup; say so when the setting moves
 
         // Aim at a stake + HOLD the vanilla Dismantle action (RU "Убрать", default C, REBINDABLE) to
         // collect the line. No mod hotkey: we read the player's own binding via Sons.Input.InputSystem,
