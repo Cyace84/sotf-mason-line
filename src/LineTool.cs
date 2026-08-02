@@ -982,6 +982,12 @@ internal static class LineTool
             .AddIngredient(StickId, 1)
             .AddIngredient(RopeId, 1)
             .AddResult(ItemId)
+            // The bow assembly animation instead of the builder's default herb-mix mashing. Each
+            // ingredient plays this state on its own mat renderable, so it fits what actually lies
+            // there: vanilla's bow is stick + rope (+ tape), and both have authored bow moves —
+            // stick bent, cord strung. Club was tried first and only the rope moved: the club
+            // recipe knows a single stick, and our stack of two lays out differently.
+            .Animation(ItemTools.CraftAnimations.CraftedBow)
             .BuildAndAdd();
     }
 }
