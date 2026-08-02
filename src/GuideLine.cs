@@ -87,6 +87,21 @@ internal static class GuideLine
 
     private static GameObject? _ghost;
 
+    // ---- cross-line snap: new stakes bind to the stakes of FINISHED lines ----
+    /// <summary>Aim closer than this (m) to a finished line's stake and the new first stake lands
+    /// exactly on it — corners and continuations share a point instead of almost sharing one.</summary>
+    private const float StakeMagnetR = 0.6f;
+    /// <summary>Capture radius (m) around the mirrored far point. Inside it the far stake locks
+    /// onto partner + (C - anchor); outside it the aim is untouched.</summary>
+    private const float MirrorCaptureR = 1.2f;
+    /// <summary>Only stakes this close to the new first stake (m, horizontal) can anchor the
+    /// mirror. Without a range, a forgotten line across the map would capture the aim.</summary>
+    private const float SnapLineRange = 30f;
+    private const float DashLen = 0.35f;
+    private const float DashPitch = 0.8f;   // dash start-to-start spacing
+    private const int MaxDashes = 48;
+    private static GameObject? _dashRoot;
+
     private static Material? _woodMat;
     private static bool _woodTried;
     private static Material? _ropeMat;
@@ -114,6 +129,54 @@ internal static class GuideLine
         return false;
     }
 
+    /// <summary>Ground positions of the stake nearest to <paramref name="near"/> among FINISHED
+    /// lines (horizontal distance), plus that stake's far end. False when none is within
+    /// <paramref name="within"/> meters.</summary>
+    private static bool TryNearestStake(Vector3 near, float within, out Vector3 anchor, out Vector3 partner)
+    {
+        anchor = partner = default;
+        float best = within * within;
+        bool found = false;
+        foreach (var ln in _lines)
+        {
+            float dA = new Vector2(ln.Origin.x - near.x, ln.Origin.z - near.z).sqrMagnitude;
+            if (dA < best) { best = dA; anchor = ln.Origin; partner = ln.GroundB; found = true; }
+            float dB = new Vector2(ln.GroundB.x - near.x, ln.GroundB.z - near.z).sqrMagnitude;
+            if (dB < best) { best = dB; anchor = ln.GroundB; partner = ln.Origin; found = true; }
+        }
+        return found;
+    }
+
+    /// <summary>First stake of a new line: aimed within <see cref="StakeMagnetR"/> of a finished
+    /// line's stake it lands exactly on that stake.</summary>
+    private static bool TrySnapStart(ref Vector3 p)
+    {
+        if (_haveA || _lines.Count == 0) return false;
+        if (!TryNearestStake(p, StakeMagnetR, out var anchor, out _)) return false;
+        p = anchor;
+        return true;
+    }
+
+    /// <summary>Far stake of a new line: the one point that copies the neighbour line exactly.
+    /// Stake C stands at some offset from a finished line's stake (the anchor); the same offset
+    /// applied to that line's other end gives E = partner + (C - anchor), where the new line comes
+    /// out exactly parallel and equally long. The offset is the player's — any direction, any gap,
+    /// the full 360 — and the capture is one point, not a direction: aim inside
+    /// <see cref="MirrorCaptureR"/> of it and the stake locks on, anywhere else plants raw.</summary>
+    private static bool TrySnapEnd(ref Vector3 p)
+    {
+        if (!_haveA || _lines.Count == 0) return false;
+        if (!TryNearestStake(_pointA, SnapLineRange, out var anchor, out var partner)) return false;
+        var off = _pointA - anchor; off.y = 0f;
+        if (off.sqrMagnitude < 0.25f) return false;   // C sits ON the stake: no offset to copy
+        var target = partner + off;
+        if (new Vector2(p.x - target.x, p.z - target.z).sqrMagnitude > MirrorCaptureR * MirrorCaptureR)
+            return false;
+        if (!TryGroundY(target, out var gy)) return false;
+        p = new Vector3(target.x, gy, target.z);
+        return true;
+    }
+
     /// <summary>Drop the next defining point: first click plants stake A, second plants stake B and
     /// strings the rope. Each completed line consumes one kit; with no kit in the pack nothing
     /// plants.</summary>
@@ -132,6 +195,7 @@ internal static class GuideLine
 
         if (!_haveA)
         {
+            TrySnapStart(ref p);   // exactly onto a neighbour stake when aimed at one
             _pointA = p;
             _haveA = true;
             _pendingStake = CreateStake("MasonLineStakeA");
@@ -140,6 +204,8 @@ internal static class GuideLine
             RLog.Msg(System.ConsoleColor.Green, "[MasonLine] stake A planted. Aim the far end and click again");
             return;
         }
+
+        TrySnapEnd(ref p);   // the click plants exactly what the ghost promised
 
         var dir = p - _pointA; dir.y = 0f;
         if (dir.sqrMagnitude < 1e-4f)
@@ -454,6 +520,8 @@ internal static class GuideLine
         _shakeStakeA = null;
         _shakeStakeB = null;
         if (_ghost != null) { Object.Destroy(_ghost); _ghost = null; }
+        // DDoL like the stakes: left alone the dashes would survive into the next world
+        if (_dashRoot != null) { Object.Destroy(_dashRoot); _dashRoot = null; }
         if (_wobbleRoot != null) Object.Destroy(_wobbleRoot);
         _wobbleRoot = null; _wobblePayload = null; _wobbleClip = null; _nudgeClip = null;
         _wobbleInitTried = false;
@@ -511,12 +579,59 @@ internal static class GuideLine
     {
         // ghost shows while finishing a line (B pending) or when another kit is ready to start one
         bool aiming = toolHeld && (_haveA || LineTool.HasKit());
-        if (!aiming) { if (_ghost != null) _ghost.SetActive(false); return; }
-        if (!TryAimPoint(out var p)) { if (_ghost != null) _ghost.SetActive(false); return; }
+        if (!aiming) { if (_ghost != null) _ghost.SetActive(false); UpdateSnapDashes(false); return; }
+        if (!TryAimPoint(out var p)) { if (_ghost != null) _ghost.SetActive(false); UpdateSnapDashes(false); return; }
+        bool snapped;
+        if (_haveA) { snapped = TrySnapEnd(ref p); UpdateSnapDashes(snapped, _pointA, p); }
+        else { TrySnapStart(ref p); UpdateSnapDashes(false); }
         EnsureGhost();
         TryAdoptVanillaGhostMat();
         _ghost!.SetActive(true);
         _ghost.transform.position = p + Vector3.up * (StakeHeight * 0.5f);
+    }
+
+    /// <summary>Vanilla-style dashed run from stake A to the aim point, shown only while the angle
+    /// snap is holding: appearing = captured, gone = released. A straight chord with no ground
+    /// sampling — it is a signal, not a rope, and it must stay cheap at one update per frame.</summary>
+    private static void UpdateSnapDashes(bool show, Vector3 a = default, Vector3 b = default)
+    {
+        if (!show) { if (_dashRoot != null && _dashRoot.activeSelf) _dashRoot.SetActive(false); return; }
+        EnsureDashes();
+        if (_dashRoot == null) return;
+        _dashRoot.SetActive(true);
+        var span = b - a;
+        float dist = span.magnitude;
+        var dir = span / Mathf.Max(dist, 1e-4f);
+        var rot = Quaternion.LookRotation(dir);
+        var lift = Vector3.up * 0.25f;                      // above the grass, under the rope
+        int lit = Mathf.Min(MaxDashes, Mathf.FloorToInt(dist / DashPitch));
+        for (int i = 0; i < MaxDashes; i++)
+        {
+            var dash = _dashRoot.transform.GetChild(i).gameObject;
+            bool on = i < lit;
+            if (dash.activeSelf != on) dash.SetActive(on);
+            if (on) dash.transform.SetPositionAndRotation(a + dir * ((i + 0.5f) * DashPitch) + lift, rot);
+        }
+    }
+
+    private static void EnsureDashes()
+    {
+        if (_dashRoot != null) return;
+        _dashRoot = new GameObject("MasonLineSnapDashes");
+        Object.DontDestroyOnLoad(_dashRoot);
+        Material? shared = null;   // one material for all dashes, not one per cube
+        for (int i = 0; i < MaxDashes; i++)
+        {
+            var dash = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            dash.name = "dash";
+            var col = dash.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+            dash.transform.localScale = new Vector3(0.05f, 0.05f, DashLen);
+            if (shared == null) { TintRenderer(dash, GhostTint); shared = dash.GetComponent<Renderer>()?.sharedMaterial; }
+            else { var r = dash.GetComponent<Renderer>(); if (r != null) r.sharedMaterial = shared; }
+            dash.transform.SetParent(_dashRoot.transform, worldPositionStays: false);
+            dash.SetActive(false);
+        }
     }
 
     // The game's blueprint look (see-through + white outline) is NOT a plain material tint: vanilla
