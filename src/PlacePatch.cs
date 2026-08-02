@@ -31,14 +31,17 @@ internal static class PlacePatch
 
         try
         {
-            // v1 gate: only warp ground (terrain) placements — that's the free-log-on-ground case.
-            // Structure-snapped placements keep their vanilla position. If non-log terrain placements
-            // get warped too, narrow this to active module == PlaceBeamOnGroundModule.
+            // Gate: warp placements that stand on the world itself, and leave structure-snapped
+            // ones at their vanilla position. Terrain alone is not enough — a flat shelf of
+            // mountain rock takes logs perfectly well but is a mesh on its own layer, so the line
+            // used to be ignored there. All three properties compare the hit transform's layer
+            // against the game's own ground layers, and the two rock ones additionally require the
+            // hit to belong to no structure element, which is the distinction we care about.
             // NOTE: the game's background snap-point predictor (PredictedSnapPointsUpdater →
             // PlaceLeaningBeamStructureModule fake pilars) also calls CalcRelativePlacePosition on
-            // half-built TargetInfos, where reading IsTerrain throws. Those calls are not the
-            // player's active placement, so swallow the exception and leave them vanilla.
-            if (!__instance.IsTerrain) return;
+            // half-built TargetInfos, where reading these throws. Those calls are not the player's
+            // active placement, so swallow the exception and leave them vanilla.
+            if (!__instance.IsTerrain && !__instance.IsValidTerrainRock && !__instance.IsValidCaveGround) return;
 
             // Only capture placements that are actually AT a string (within the configured snap
             // distance sideways, between the stakes; nearest line wins). Anything else on the map
