@@ -9,12 +9,12 @@ namespace MasonLine;
 internal static partial class GuideLine
 {
     // Ghost tint: translucent white like the vanilla build ghosts (the old (0.55,0.8,1) blue read as
-    // an artifact — user). Live-tunable via tune.sh ghost R G B A.
+    // an artifact — user). Live-tunable via ~/tools/sotf-tune.sh ghost R G B A.
     private static readonly Color GhostTint = new Color(1f, 1f, 1f, 0.3f);
 
     private const float StakeHeight = 1.1f;
     private const float StakeRadius = 0.05f;
-    // Real-branch stake (live-tuned via tune.sh to match the in-game StandingStickElement):
+    // Real-branch stake (live-tuned via ~/tools/sotf-tune.sh to match the in-game StandingStickElement):
     // mesh BranchABMeshLOD0 (long axis = local Z) + material BranchA, non-uniform scale — thin X/Y,
     // long Z — stood upright with a 90°-about-X rotation. Fallback = the old wooden cylinder.
     private const float StakeThick = 1.96f;
@@ -38,7 +38,7 @@ internal static partial class GuideLine
     private const float SagFraction = 0.06f;
     private const float KnotScale = 0.8f;
     /// <summary>Mesh-pivot correction for the knot, in the knot's OWN axes (X across the rope,
-    /// Y up, Z along it), so it holds at any line direction. Live-tuned (./tune.sh knotrel) on two
+    /// Y up, Z along it), so it holds at any line direction. Live-tuned (~/tools/sotf-tune.sh knotrel) on two
     /// lines at different angles — the tuner moves every knot at once, so the second line was
     /// re-planted to watch a fresh one react. Across the rope both settled on -0.01 independently.
     /// Along it they ended at +0.01 and +0.03 and both read fine, which says the axis is forgiving:

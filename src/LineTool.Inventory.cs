@@ -20,7 +20,7 @@ internal static partial class LineTool
     private static Sons.Inventory.InventoryLayoutItemGroup? _invGroup;
     private static readonly System.Collections.Generic.List<MeshOutliner> _invOutliners = new();
 
-    // Hover-wobble pose, user-tuned (tune.sh: `wob 0 0 90  90 10 0` + `wobpivot -0.37`).
+    // Hover-wobble pose, user-tuned (~/tools/sotf-tune.sh: `wob 0 0 90  90 10 0` + `wobpivot -0.37`).
     // The wobble clip is shared by all items and tilts around the group origin; the frame roll (Z=90)
     // aims the tilt, the StakeVisual offset moves the stick OFF the pivot so one end lifts axe-style
     // instead of see-sawing. Values are the SETTLED LOCALS read live with the backpack open
@@ -133,16 +133,16 @@ internal static partial class LineTool
     // Lay the stake FLAT in the mat plane (horizontal). At identity the cylinder's long axis (local Y)
     // points along the mat normal -> end-on top-down (invisible dot); 90° about X drops it into the
     // plane so it reads as a stake and doesn't dip its base into the mat/other items. Live-tunable.
-    // Live-tuned (tune.sh) so the INVENTORY browse model reads world-euler ~(90,10,0) — stake lying
+    // Live-tuned (~/tools/sotf-tune.sh) so the INVENTORY browse model reads world-euler ~(90,10,0) — stake lying
     // flat on the mat, long axis "up" the screen like the spears/tools. This local euler is relative
     // to the DevilsClub-derived layout-item frame; the crafting-result popup (different parent frame)
     // inherits the same local euler and will differ — tune that separately if it bothers.
-    // Live-tuned (tune.sh) + user-approved: StakeVisual world euler (90,10,0) resolves to this LOCAL
+    // Live-tuned (~/tools/sotf-tune.sh) + user-approved: StakeVisual world euler (90,10,0) resolves to this LOCAL
     // euler under the DevilsClub-derived layout-item frame. Branch top reads "up the mat", not sideways.
     private static readonly Vector3 MatDisplayEuler = new Vector3(83.7f, 234.2f, 0.6f);
     private const float MatDisplayScale = 1.4f;   // layout item already scales up ~1.7x; keep this modest
 
-    // The freshly crafted stick sat too low on the mat. Live-tuned (./tune.sh matpos) to +0.2 along the
+    // The freshly crafted stick sat too low on the mat. Live-tuned (~/tools/sotf-tune.sh matpos) to +0.2 along the
     // wrapper's local Z, which is "up the mat" once MatDisplayEuler has laid it flat. This prefab is
     // shared with the backpack model, but ApplyWobblePose re-pins that instance to InvStakePos on every
     // backpack opening, so the offset only ever shows on the crafting-result copy.
@@ -258,7 +258,7 @@ internal static partial class LineTool
     // frame (…/CraftingSystem/CraftingResultLayoutGroups/MasonLineLayoutGroup/HealthMixCrafting-
     // ResultLayoutItem/MasonLineInvModel(Clone)) — a different parent chain than the backpack layout
     // item, so the backpack-approved local euler reads crooked there. Live-tuned
-    // (tune.sh mat 90 0 85, user-approved "вот это четкое"): world (90,0,85) resolves to this LOCAL
+    // (~/tools/sotf-tune.sh mat 90 0 85, user-approved "вот это четкое"): world (90,0,85) resolves to this LOCAL
     // under the craft frame. Scale stays 1.4 (prefab). Set-once per clone is enough: matshow showed the
     // baked local UNTOUCHED on a live craft popup — nothing animates StakeVisual locals.
     private static readonly Vector3 CraftDisplayEuler = new Vector3(90f, 269.9f, 0f);

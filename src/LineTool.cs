@@ -111,7 +111,7 @@ internal static partial class LineTool
             // SDK AddInventoryItem() with NO position clones the DevilsClub(449) group and never sets
             // localPosition -> our group lands ON TOP of DevilsClub in the herbs area, buried/invisible
             // (decompile SonsSdk ItemBuilder.AddInventoryItem: positions[0] = group localPosition).
-            // Live-tuned (tune.sh) to sit in the tools/spears zone: mat plane = X,Z ; up = Y.
+            // Live-tuned (~/tools/sotf-tune.sh) to sit in the tools/spears zone: mat plane = X,Z ; up = Y.
             builder.AddInventoryItem(new Vector3(1.2f, 0.015f, 0.9f));
             builder.AddCraftingResultItem();
             builder.SetupHeld();
