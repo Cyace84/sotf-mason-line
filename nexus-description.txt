@@ -16,6 +16,9 @@ No custom keybinds. The mod adds no hotkeys of its own and reads your existing b
 [size=4][b]Multiple lines[/b][/size]
 Each crafted bundle is one line, and they all snap at the same time: a log goes to whichever cord is closest. Aim the first stake of a new line at one already standing and it lands exactly on it, so a run can turn a corner and carry on from the same point. Nothing squares up the angle between them, though, so that part is yours to judge.
 
+[size=4][b]What snaps[/b][/size]
+More than logs. Anything the game lets you set down loose on open ground follows it: logs flat or standing, standing sticks, campfires, rocks. Guidebook blueprints, the ghosts you build up piece by piece like a bed, do not snap; the line guides loose pieces only.
+
 [size=4][b]Settings[/b][/size]
 The mod menu writes [font=Courier New]UserData/MasonLine.cfg[/font].
 [list]

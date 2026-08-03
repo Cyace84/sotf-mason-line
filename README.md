@@ -12,6 +12,8 @@ A craftable string line for Sons of the Forest. Stretch it between two stakes, a
 
 Each crafted bundle is one line. Craft more bundles for more lines; they all work at the same time. Aim the first stake of a new line at one already standing and it lands exactly on it, so a run can turn a corner and carry on from the same point, though nothing squares up the angle between them.
 
+The cord takes more than logs. Anything the game lets you set down loose on open ground follows it: logs flat or standing, standing sticks, campfires, rocks. Guidebook blueprints, the ghosts you build up piece by piece like a bed, do not snap; the line guides loose pieces only.
+
 ## Settings
 
 The mod menu writes `UserData/MasonLine.cfg`.
