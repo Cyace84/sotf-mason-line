@@ -17,8 +17,8 @@ namespace MasonLine;
 /// </summary>
 internal static class GuideLine
 {
-    /// <summary>One placed string line: geometry + its own world visuals. Kit economy: 1 kit =
-    /// 1 line, so several crafted kits = several simultaneous lines (user bug: the old
+    /// <summary>One placed string line: geometry + its own world visuals. Kit economy: 1 bundle =
+    /// 1 line, so several crafted bundles = several simultaneous lines (user bug: the old
     /// static singleton allowed only one line in the world).</summary>
     private sealed class Line
     {
@@ -151,13 +151,13 @@ internal static class GuideLine
     }
 
     /// <summary>Drop the next defining point: first click plants stake A, second plants stake B and
-    /// strings the rope. Each completed line consumes one kit; with no kit in the pack nothing
+    /// strings the rope. Each completed line consumes one bundle; with no bundle in the pack nothing
     /// plants.</summary>
     public static void DropPoint()
     {
         if (!_haveA && !LineTool.HasKit())
         {
-            RLog.Warning("[MasonLine] no string line kit in the inventory. Craft another (stick + rope)");
+            RLog.Warning("[MasonLine] no string line bundle in the inventory. Craft another (2 sticks + rope)");
             return;
         }
         if (!TryAimPoint(out var p))
@@ -185,8 +185,8 @@ internal static class GuideLine
             return;
         }
 
-        // The kit pays for the line, so take it BEFORE anything is built. Paying afterwards meant a
-        // failed RemoveItem left a working line standing that no kit had bought and that collecting
+        // The bundle pays for the line, so take it BEFORE anything is built. Paying afterwards meant a
+        // failed RemoveItem left a working line standing that no bundle had bought and that collecting
         // could not refund.
         if (!LineTool.ConsumeKit()) return;
 
@@ -437,7 +437,7 @@ internal static class GuideLine
         catch { }
     }
 
-    /// <summary>Hold-to-dismantle completed: pull out the AIMED line (kit back) or cancel the pending stake A
+    /// <summary>Hold-to-dismantle completed: pull out the AIMED line (bundle back) or cancel the pending stake A
     /// (nothing was consumed yet). Other lines stay standing.</summary>
     public static void CollectAimed()
     {
@@ -460,7 +460,7 @@ internal static class GuideLine
     }
 
     /// <summary>The tool left the hands with stake A planted and no far end yet. Nothing has been
-    /// paid for it — the kit is only consumed when a line completes — so the stake is simply
+    /// paid for it — the bundle is only consumed when a line completes — so the stake is simply
     /// dropped. Left standing it is invisible state: minutes later and metres away the next click
     /// silently strings a line back to it (user-reported).</summary>
     public static void CancelPending()
@@ -474,9 +474,9 @@ internal static class GuideLine
     }
 
     /// <summary>World unload/load: the lines are NOT part of the save and the stakes are DDoL — left
-    /// alone they survive into a reloaded older save whose inventory still holds the kits
+    /// alone they survive into a reloaded older save whose inventory still holds the bundles
     /// (user-repro'd dupe). Destroy every visual, drop all cached scene assets (materials/
-    /// meshes/clips unload with the world; the getters re-find them lazily). NO kit refunds here —
+    /// meshes/clips unload with the world; the getters re-find them lazily). NO bundle refunds here —
     /// the save-time marker handles inventory restitution on load.</summary>
     public static void ResetWorld()
     {
@@ -546,7 +546,7 @@ internal static class GuideLine
     /// ghost material asset, and destroying THAT would break vanilla ghosts.</summary>
     public static void UpdateGhost(bool toolHeld)
     {
-        // ghost shows while finishing a line (B pending) or when another kit is ready to start one
+        // ghost shows while finishing a line (B pending) or when another bundle is ready to start one
         bool aiming = toolHeld && (_haveA || LineTool.HasKit());
         if (!aiming) { if (_ghost != null) _ghost.SetActive(false); return; }
         if (!TryAimPoint(out var p)) { if (_ghost != null) _ghost.SetActive(false); return; }

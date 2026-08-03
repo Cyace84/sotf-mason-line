@@ -10,7 +10,7 @@ using UnityEngine;
 namespace MasonLine;
 
 /// <summary>
-/// The craftable "Mason Line" item: stick + rope at the crafting mat.
+/// The craftable "Mason Line" item: 2 sticks + rope at the crafting mat.
 /// ItemData is a clone of GPSLocator (529) — proven equippable/craftable/droppable template with
 /// RightHand slot + sane held anim vars. The held visual is a GPS held-prefab clone with the GPS
 /// behaviours stripped and a stake+knot model in their place; the game instantiates it into the
@@ -19,7 +19,7 @@ namespace MasonLine;
 /// </summary>
 internal static class LineTool
 {
-    /// <summary>Inventory id the kit is registered under. Well above the vanilla range (max ~726),
+    /// <summary>Inventory id the bundle is registered under. Well above the vanilla range (max ~726),
     /// but nothing stops another mod from picking the same number, so the player can move ours. Read
     /// once at startup: changing it mid-session would strand everything already counted under the
     /// old id.</summary>
@@ -141,7 +141,7 @@ internal static class LineTool
             Ready = true;
             RestoreKitsFromMarker();
             RLog.Msg(System.ConsoleColor.Cyan,
-                "[MasonLine] Mason Line ready, craft: 1 stick + 1 rope, equip it to place the line");
+                "[MasonLine] Mason Line ready, craft: 2 sticks + 1 rope, equip it to place the line");
         }
         catch (System.Exception ex)
         {
@@ -150,11 +150,11 @@ internal static class LineTool
         }
     }
 
-    // ---- kit economy (user-approved design): one craft = one kit = one active line,
-    // unlimited length, NO ingredient burn. Physicality: while the line stands in the world the kit
+    // ---- bundle economy (user-approved design): one craft = one bundle = one active line,
+    // unlimited length, NO ingredient burn. Physicality: while the line stands in the world the bundle
     // is OUT of the inventory (RemoveItem instantDestroy:true — the same flag the game itself uses
     // for placement-consume, memento-mori flag telemetry); collecting the line (hold Dismantle) returns it.
-    // A marker file survives a game restart so a saved-with-line-out inventory gets the kit back
+    // A marker file survives a game restart so a saved-with-line-out inventory gets the bundle back
     // (the line itself is not in the save). Signatures observed: PlayerInventory.AddItem/RemoveItem/
     // AmountOf decompile.
     /// <summary>Upper bound for a refund, mirroring the item's stack size at _maxAmount. Guards the
@@ -167,7 +167,7 @@ internal static class LineTool
     private static string KitMarkerPath =>
         System.IO.Path.Combine(RedLoader.Utils.LoaderEnvironment.UserDataDirectory, "MasonLine.line-out");
 
-    /// <summary>The marker used to live in the save folder. Move it once, so a kit staked out before
+    /// <summary>The marker used to live in the save folder. Move it once, so a bundle staked out before
     /// this update is still refunded instead of silently lost.</summary>
     private static void MigrateMarkerFromSaveFolder()
     {
@@ -177,19 +177,19 @@ internal static class LineTool
             if (!System.IO.File.Exists(old) || System.IO.File.Exists(KitMarkerPath)) return;
             System.IO.File.Copy(old, KitMarkerPath);
             System.IO.File.Delete(old);
-            RLog.Msg($"[MasonLine] moved the kit marker to {KitMarkerPath}");
+            RLog.Msg($"[MasonLine] moved the bundle marker to {KitMarkerPath}");
         }
-        catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit marker move failed: {ex.Message}"); }
+        catch (System.Exception ex) { RLog.Warning($"[MasonLine] bundle marker move failed: {ex.Message}"); }
     }
 
     /// <summary>SdkEvents.OnWorldExited (quit to menu): lines are NOT in the save and must not leak
-    /// into the next world — DDoL carried them across reloads => user-repro'd kit dupe.</summary>
+    /// into the next world — DDoL carried them across reloads => user-repro'd bundle dupe.</summary>
     public static void OnWorldExited()
     {
         GuideLine.ResetWorld();
         _kitsOut = 0;
         // New Game does not go through SaveGameManager.Load, so a stale id from the slot we just quit
-        // would make THAT slot's marker match and hand out a free kit in the fresh world (and, since
+        // would make THAT slot's marker match and hand out a free bundle in the fresh world (and, since
         // markers are kept, again in the original slot = dupe).
         _loadedSaveId = 0;
         // per-world pipeline state: without this, menu-time Ticks kept scanning dead scene objects
@@ -206,7 +206,7 @@ internal static class LineTool
     }
 
     // Save-slot id source: GameSetupManager.GetSelectedSaveId() is only valid in the LOAD MENU —
-    // during an in-game save it returns 0 (observed: marker "0 1", refund missed, kit lost — user
+    // during an in-game save it returns 0 (observed: marker "0 1", refund missed, bundle lost — user
     // repro). The dir argument of SaveGameManager.Save/Load ends in the numeric save id
     // (…/SinglePlayer/<id>), so BOTH sides parse the id from the same source: the path.
     private static uint _loadedSaveId;   // id of the save the current world was loaded from (0 = new game)
@@ -227,7 +227,7 @@ internal static class LineTool
     internal static void OnLoadDir(string dir) => _loadedSaveId = ParseSaveIdFromDir(dir);
 
     /// <summary>Harmony prefix on SaveGameManager.Save: stamp the marker with THIS save slot's id +
-    /// kits currently staked out. Written at save time, the marker matches the save's inventory
+    /// bundles currently staked out. Written at save time, the marker matches the save's inventory
     /// EXACTLY — so the load-time refund is unconditional, no AmountOf heuristics.</summary>
     internal static void OnBeforeSave(string dir)
     {
@@ -235,26 +235,26 @@ internal static class LineTool
         {
             uint id = ParseSaveIdFromDir(dir);
             // Rewrite OUR slot's line only. A single global line meant saving slot B overwrote slot
-            // A's pending refund, so loading A found no marker and the staked-out kit was gone for
+            // A's pending refund, so loading A found no marker and the staked-out bundle was gone for
             // good. The delete branch already knew this and compared
             // ids; the write branch did not.
             var lines = ReadMarkerLines();
             if (lines == null)
             {
-                RLog.Error($"[MasonLine] the kit marker is unreadable, so {_kitsOut} staked-out kit(s) " +
+                RLog.Error($"[MasonLine] the bundle marker is unreadable, so {_kitsOut} staked-out bundle(s) " +
                            "cannot be recorded for this save; collect your lines before quitting");
                 return;
             }
             lines.RemoveAll(l => SlotOfMarkerLine(l) == id);
             if (_kitsOut > 0) lines.Add($"{id} {_kitsOut}");
             if (!WriteMarkerLines(lines) && _kitsOut > 0)
-                RLog.Error($"[MasonLine] {_kitsOut} staked-out kit(s) could not be recorded; " +
+                RLog.Error($"[MasonLine] {_kitsOut} staked-out bundle(s) could not be recorded; " +
                            "collect your lines before quitting or they are lost");
         }
-        catch (System.Exception ex) { RLog.Error($"[MasonLine] saving the kit marker failed: {ex}"); }
+        catch (System.Exception ex) { RLog.Error($"[MasonLine] saving the bundle marker failed: {ex}"); }
     }
 
-    /// <summary>Marker file body: one "&lt;slotId&gt; &lt;kits&gt;" line per save slot that has kits in the
+    /// <summary>Marker file body: one "&lt;slotId&gt; &lt;bundles&gt;" line per save slot that has bundles in the
     /// field. Missing file = nobody has anything staked out.</summary>
     /// <summary>Returns null when the file exists but could not be read. A missing file is an empty
     /// list; an unreadable one must NOT look the same, or a rewrite would drop the other slots.</summary>
@@ -279,7 +279,7 @@ internal static class LineTool
     }
 
     /// <summary>Writes through a temp file so a crash or a full disk cannot leave a half-written
-    /// marker: the old one survives intact instead. False means the kits are NOT recorded.</summary>
+    /// marker: the old one survives intact instead. False means the bundles are NOT recorded.</summary>
     private static bool WriteMarkerLines(System.Collections.Generic.List<string> lines)
     {
         try
@@ -306,8 +306,8 @@ internal static class LineTool
     private static uint SlotOfMarkerLine(string line) =>
         ParseMarkerLine(line, out var id, out _) ? id : uint.MaxValue;
 
-    /// <summary>The one parser for "&lt;slotId&gt; &lt;kits&gt;". Splits on any run of whitespace, demands
-    /// exactly two fields, and caps the count at a stack of kits so a hand-edited file cannot spin
+    /// <summary>The one parser for "&lt;slotId&gt; &lt;bundles&gt;". Splits on any run of whitespace, demands
+    /// exactly two fields, and caps the count at a stack of bundles so a hand-edited file cannot spin
     /// the refund loop.</summary>
     private static bool ParseMarkerLine(string line, out uint slot, out int kits)
     {
@@ -318,13 +318,13 @@ internal static class LineTool
         if (!int.TryParse(parts[1], out kits) || kits < 0) { kits = 0; return false; }
         if (kits > MaxKits)
         {
-            RLog.Warning($"[MasonLine] kit marker claims {kits} kits for slot {slot}; capped at {MaxKits}");
+            RLog.Warning($"[MasonLine] bundle marker claims {kits} bundles for slot {slot}; capped at {MaxKits}");
             kits = MaxKits;
         }
         return true;
     }
 
-    /// <summary>Is a kit available to start a new line? With no registered item there is nothing to
+    /// <summary>Is a bundle available to start a new line? With no registered item there is nothing to
     /// spend, so the answer is no rather than the old free-for-all.</summary>
     public static bool HasKit()
     {
@@ -337,9 +337,9 @@ internal static class LineTool
         catch { return true; }
     }
 
-    /// <summary>Line completed (stake B planted): take ONE kit out of the inventory. Several kits
+    /// <summary>Line completed (stake B planted): take ONE bundle out of the inventory. Several bundles
     /// = several simultaneous lines. False means nothing was taken and the line must not be built,
-    /// or the player would keep the kit AND get the line.</summary>
+    /// or the player would keep the bundle AND get the line.</summary>
     public static bool ConsumeKit()
     {
         if (!Ready) return false;
@@ -350,20 +350,20 @@ internal static class LineTool
             if (inv.RemoveItem(ItemId, 1, false, true, true, null, true))
             {
                 _kitsOut++;
-                RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] kit staked out ({_kitsOut} in the field). Collect the line (hold Dismantle) to get it back");
+                RLog.Msg(System.ConsoleColor.Yellow, $"[MasonLine] bundle staked out ({_kitsOut} in the field). Collect the line (hold Dismantle) to get it back");
                 return true;
             }
-            RLog.Warning("[MasonLine] the kit could not be taken from the pack, so no line was set");
+            RLog.Warning("[MasonLine] the bundle could not be taken from the pack, so no line was set");
             return false;
         }
         catch (System.Exception ex)
         {
-            RLog.Warning($"[MasonLine] the kit could not be taken from the pack: {ex.Message}");
+            RLog.Warning($"[MasonLine] the bundle could not be taken from the pack: {ex.Message}");
             return false;
         }
     }
 
-    /// <summary>One line collected/cleared: put ONE kit back. Gated by the out-counter, so a C on
+    /// <summary>One line collected/cleared: put ONE bundle back. Gated by the out-counter, so a C on
     /// a lone pending stake (nothing consumed yet) refunds nothing.</summary>
     public static void RefundKit()
     {
@@ -375,14 +375,14 @@ internal static class LineTool
             {
                 _kitsOut--;
                 FixRenderableLoadedFlags();   // re-add touches the layout item; make sure its renderable is safe
-                RLog.Msg(System.ConsoleColor.Green, "[MasonLine] kit returned to the inventory");
+                RLog.Msg(System.ConsoleColor.Green, "[MasonLine] bundle returned to the inventory");
             }
-            else RLog.Warning("[MasonLine] kit refund failed (AddItem=false): count kept, the save-time marker will restore it");
+            else RLog.Warning("[MasonLine] bundle refund failed (AddItem=false): count kept, the save-time marker will restore it");
         }
-        catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit refund failed: {ex.Message}"); }
+        catch (System.Exception ex) { RLog.Warning($"[MasonLine] bundle refund failed: {ex.Message}"); }
     }
 
-    /// <summary>World load: lines never survive a reload (ResetWorld), so kits stamped as staked-out
+    /// <summary>World load: lines never survive a reload (ResetWorld), so bundles stamped as staked-out
     /// in THIS save's marker go back to the inventory. The slot id gates cross-slot refunds; markers
     /// are KEPT after refunding (they belong to the save on disk — reloading the same save again
     /// without saving must refund again; the next save rewrites/deletes them).</summary>
@@ -397,7 +397,7 @@ internal static class LineTool
             // wrong for one we simply could not open, so say so instead of quietly skipping.
             if (lines == null)
             {
-                RLog.Error("[MasonLine] the kit marker could not be read; staked-out kits are not " +
+                RLog.Error("[MasonLine] the bundle marker could not be read; staked-out bundles are not " +
                            "refunded this load");
                 return;
             }
@@ -418,21 +418,21 @@ internal static class LineTool
                     var countText = bareCount ? legacyParts[0] : legacyParts[1];
                     if (!int.TryParse(countText, out var legacy) || legacy < 1)
                     {
-                        RLog.Warning($"[MasonLine] kit marker '{lines[0]}' is not readable; leaving it in place");
+                        RLog.Warning($"[MasonLine] bundle marker '{lines[0]}' is not readable; leaving it in place");
                         return;
                     }
                     if (legacy > MaxKits) legacy = MaxKits;
                     if (inv.AmountOf(ItemId) > 0) return;   // already refunded once
                     int back = 0;
                     for (int i = 0; i < legacy; i++) if (inv.AddItem(ItemId)) back++;
-                    // Only now: the file is the sole record, so it goes away once its kits are in hand.
+                    // Only now: the file is the sole record, so it goes away once its bundles are in hand.
                     if (back == legacy) WriteMarkerLines(new System.Collections.Generic.List<string>());
-                    else RLog.Warning($"[MasonLine] only {back} of {legacy} kit(s) fit; the marker stays for the rest");
+                    else RLog.Warning($"[MasonLine] only {back} of {legacy} bundle(s) fit; the marker stays for the rest");
                     return;
                 }
             }
 
-            if (_loadedSaveId == 0) return;   // New Game: no slot owns these kits
+            if (_loadedSaveId == 0) return;   // New Game: no slot owns these bundles
             int n = 0;
             foreach (var line in lines)
                 if (ParseMarkerLine(line, out var id, out var kits) && id == _loadedSaveId) { n = kits; break; }
@@ -444,20 +444,20 @@ internal static class LineTool
             if (given < n)
             {
                 _kitsOut = n - given;
-                RLog.Warning($"[MasonLine] only {given} of {n} kit(s) fit in the pack; the rest stay on the marker");
+                RLog.Warning($"[MasonLine] only {given} of {n} bundle(s) fit in the pack; the rest stay on the marker");
             }
             if (given > 0)
-                RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] {given} kit(s) were staked out when this save was made, and they are back in your pack");
+                RLog.Msg(System.ConsoleColor.Green, $"[MasonLine] {given} bundle(s) were staked out when this save was made, and they are back in your pack");
         }
-        catch (System.Exception ex) { RLog.Warning($"[MasonLine] kit marker restore failed: {ex.Message}"); }
+        catch (System.Exception ex) { RLog.Warning($"[MasonLine] bundle marker restore failed: {ex.Message}"); }
     }
 
-    /// <summary>Register the ItemData BEFORE the save deserializes, or a stored kit is lost.
+    /// <summary>Register the ItemData BEFORE the save deserializes, or a stored bundle is lost.
     /// Inventory deserialization runs during world load, and registration used to happen later, at
     /// OnAfterSpawn — an ItemId the database does not know at deserialize time
     /// is silently DROPPED from the loaded inventory (save file had ItemBlock 9417, in-game
-    /// inventory came up without it, zero kit log lines). In-process world reloads were immune
-    /// (ItemData already registered from the first spawn), only a COLD game start lost the kit.
+    /// inventory came up without it, zero bundle log lines). In-process world reloads were immune
+    /// (ItemData already registered from the first spawn), only a COLD game start lost the bundle.
     /// Called from OnSdkInitialized (title) and from the SaveGameManager.Load prefix (last line of
     /// defence, fires right before deserialize). Spawn-time Setup stays as the fallback.</summary>
     /// <summary>Is the item currently sitting on our id actually ours? Compared by the name we stamp
@@ -475,7 +475,7 @@ internal static class LineTool
     private static bool _conflictReported;
 
     /// <summary>Another mod owns our item id. Say so once, loudly, with the fix: the mod menu can
-    /// move ours. Staying quiet here is what turns a collision into "my kit does nothing".</summary>
+    /// move ours. Staying quiet here is what turns a collision into "my bundle does nothing".</summary>
     private static void ReportItemIdConflict()
     {
         if (_conflictReported) return;
@@ -488,7 +488,7 @@ internal static class LineTool
         }
         catch { }
         RLog.Error($"[MasonLine] item id {ItemId} is already taken by {other}. Mason Line will not " +
-                   "register its kit, to avoid corrupting that item. Set overrideItemId = true and " +
+                   "register its bundle, to avoid corrupting that item. Set overrideItemId = true and " +
                    "itemId to another number in UserData/MasonLine.cfg, then restart the game.");
     }
 
@@ -516,7 +516,7 @@ internal static class LineTool
             }
             RegisterItemOnce();
             RLog.Msg(System.ConsoleColor.Cyan,
-                $"[MasonLine] item {ItemId} registered early ({context}): saved kits survive a cold start");
+                $"[MasonLine] item {ItemId} registered early ({context}): saved bundles survive a cold start");
         }
         catch (System.Exception ex)
         {
@@ -979,7 +979,9 @@ internal static class LineTool
         }
 
         new ItemTools.RecipeBuilder()
-            .AddIngredient(StickId, 1)
+            // two sticks, one rope: the bundle is literally two stakes and a cord, and a single
+            // stick + rope is the most crowded pair on the mat for other mods to claim
+            .AddIngredient(StickId, 2)
             .AddIngredient(RopeId, 1)
             .AddResult(ItemId)
             // The bow assembly animation instead of the builder's default herb-mix mashing. Each
