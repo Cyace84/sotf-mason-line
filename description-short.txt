@@ -1,0 +1,11 @@
+A stake-and-rope guide line you craft from 2 sticks and 1 rope. Plant a stake where a wall should start, another where it should end, and a cord pulls tight between them. Set a log down beside it and it snaps onto the line, so the wall runs stake to stake instead of wherever the first log happened to point.
+
+The game stacks logs perfectly, but the direction comes from the first one, dropped by hand with nothing to line it up against. A degree off there and ten logs later the wall is solid, level, and half a meter from where you meant it to be.
+
+**Controls.** No custom keybinds. Left-click plants a stake, first A then B. Hold Dismantle (C by default) on a stake to collect the line and get the bundle back.
+
+**What snaps.** Logs flat or standing, standing sticks, campfires, rocks — anything you set down loose on open ground. Guidebook blueprints do not.
+
+**Notes.** Each bundle is one line and they all work at once. Lines are not part of the save: reload and the line is gone, its bundle back in your pack. Co-op works peer-to-peer, one line per player.
+
+Full description and source: [GitHub](https://github.com/Cyace84/sotf-mason-line)

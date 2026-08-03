@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds the Nexus upload archive. Layout matches the install instructions in README.md and
-# nexus-description.txt: the player unpacks INTO the game's Mods/ folder, so the zip carries no
-# Mods/ prefix of its own (chronos/package.sh does the opposite, its docs say to unpack into the
-# game root). Version comes from manifest.json so the file name can never disagree with what the
-# loader reports.
+# Builds the upload archive. The Mods/ prefix is not a taste question: RedLoader's own install page
+# tells players to extract the zip into the GAME folder and end up with a dll plus a same-named
+# folder inside Mods/, and Red Manager on sotf-mods.com installs from these archives unattended.
+# Verified against a published mod rather than the docs alone - stackmod 1.4.0 downloaded from
+# sotf-mods.com contains exactly Mods/StackMod.dll and Mods/StackMod/manifest.json. An archive
+# without the prefix installs to the wrong place for anyone who follows the standard instructions.
+# Version comes from manifest.json so the file name can never disagree with what the loader reports.
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
@@ -18,13 +20,13 @@ ARCHIVE="dist/$PACKAGE_NAME.zip"
 
 rm -rf "$STAGE_DIR" "$ARCHIVE"
 dotnet build -c Release | tail -3
-mkdir -p "$STAGE_DIR/MasonLine"
-cp bin/Release/MasonLine.dll "$STAGE_DIR/MasonLine.dll"
-cp manifest.json "$STAGE_DIR/MasonLine/manifest.json"
+mkdir -p "$STAGE_DIR/Mods/MasonLine"
+cp bin/Release/MasonLine.dll "$STAGE_DIR/Mods/MasonLine.dll"
+cp manifest.json "$STAGE_DIR/Mods/MasonLine/manifest.json"
 
 (
     cd "$STAGE_DIR"
-    zip -qr "../$PACKAGE_NAME.zip" MasonLine.dll MasonLine
+    zip -qr "../$PACKAGE_NAME.zip" Mods
 )
 rm -rf "$STAGE_DIR"
 

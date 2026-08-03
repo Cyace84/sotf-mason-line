@@ -43,7 +43,7 @@ The mod ships three crash guards, and two of them are game-wide rather than spec
 [size=4][b]Install[/b][/size]
 [list=1]
 [*]Install [url=https://github.com/ToniMacaroni/RedLoader]RedLoader[/url] and run the game once.
-[*]Unpack the archive into the game's [font=Courier New]Mods/[/font] folder. You should end up with [font=Courier New]Mods/MasonLine.dll[/font] and a [font=Courier New]Mods/MasonLine/[/font] folder holding the manifest.
+[*]Unpack the archive into the game folder, the one holding [font=Courier New]SonsOfTheForest.exe[/font]. The zip carries its own [font=Courier New]Mods/[/font] folder, so you end up with [font=Courier New]Mods/MasonLine.dll[/font] and a [font=Courier New]Mods/MasonLine/[/font] folder holding the manifest.
 [*]Start the game. The recipe shows up on the crafting mat as Mason Line.
 [/list]
 

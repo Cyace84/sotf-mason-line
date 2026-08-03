@@ -44,7 +44,7 @@ Harmony postfix on `TargetInfo.CalcRelativePlacePosition` projects `PlacePositio
 
 Requires [RedLoader](https://github.com/ToniMacaroni/RedLoader).
 
-Drop `MasonLine.dll` into the game's `Mods/` folder, and `manifest.json` into `Mods/MasonLine/` next to it:
+Unpack the archive into the game folder, the one holding `SonsOfTheForest.exe`. The zip carries its own `Mods/` folder, so the files land where the loader looks for them:
 
 ```
 Mods/
