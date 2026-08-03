@@ -204,20 +204,36 @@ internal static partial class LineTool
     }
 
     /// <summary>One line collected/cleared: put ONE bundle back. Gated by the out-counter, so a C on
-    /// a lone pending stake (nothing consumed yet) refunds nothing.</summary>
+    /// a lone pending stake (nothing consumed yet) refunds nothing.
+    ///
+    /// observed: the pack holds 20 of these (_maxAmount), so collecting a line with a full pack has
+    /// nowhere to put the bundle — AddItem returns false and the line is already gone (CollectAimed
+    /// destroys it before calling here).
+    ///
+    /// That bundle is dropped on purpose, and the counter goes down with it. Keeping it owed was the
+    /// obvious alternative and it is worse: the debt comes back on the next load, so a player who
+    /// spammed lines all over the base could never actually get rid of the surplus. Refusing to
+    /// collect while full is worse still — then the lines themselves become unremovable. Destroying
+    /// the overflow is what makes cleanup possible, and the pack cap is the price list the player
+    /// already understands. The warning below is the only notice; it must stay.</summary>
     public static void RefundKit()
     {
         if (_kitsOut <= 0) return;
         try
         {
             var inv = LocalPlayer.Inventory;
-            if (inv != null && inv.AddItem(ItemId))
+            if (inv == null) return;          // cannot ask, so keep the count: this is an error, not a full pack
+            if (inv.AddItem(ItemId))
             {
                 _kitsOut--;
                 FixRenderableLoadedFlags();   // re-add touches the layout item; make sure its renderable is safe
                 RLog.Msg(System.ConsoleColor.Green, "[MasonLine] bundle returned to the inventory");
             }
-            else RLog.Warning("[MasonLine] bundle refund failed (AddItem=false): count kept, the save-time marker will restore it");
+            else
+            {
+                _kitsOut--;                   // the pack said no: discard it rather than owe it forever
+                RLog.Warning("[MasonLine] pack is full, the collected bundle was discarded");
+            }
         }
         catch (System.Exception ex) { RLog.Warning($"[MasonLine] bundle refund failed: {ex.Message}"); }
     }
