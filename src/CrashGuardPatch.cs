@@ -96,9 +96,10 @@ internal static class HardSurfaceImpactCrashGuard
 
     // Belt-and-suspenders. The prefix rejects colliders it can recognise as unsafe, but a mesh can
     // still lie: BackpackGroundMesh is a PARTIAL HULL, convex==true yet ClosestPoint throws anyway
-    // ("Couldn't create a Convex Mesh ... within the maximum polygons limit"). Any managed exception escaping this method crosses the
-    // native physics callback and native-crashes the process (crash on clicking an inventory item,
-    //). A Harmony finalizer that returns null SWALLOWS whatever the body threw, for every
+    // ("Couldn't create a Convex Mesh ... within the maximum polygons limit"). Any managed
+    // exception escaping this method crosses the native physics callback and native-crashes the
+    // process (crash on clicking an inventory item).
+    // A Harmony finalizer that returns null SWALLOWS whatever the body threw, for every
     // collider type — the throw never reaches native. Cost = one unplayed impact SFX.
     private static System.Exception? Finalizer(System.Exception? __exception)
     {

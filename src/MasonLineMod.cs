@@ -10,8 +10,8 @@ namespace MasonLine;
 /// (1st = stake A, 2nd = stake B -> the string line runs A->B). Free log placement near the string
 /// snaps onto it; hold Dismantle on a stake to pull the line out (bundle returns to the inventory).
 /// A translucent ghost stake previews where the point will land. If the item pipeline failed to
-/// initialize, placement works ungated (dev fallback). The actual snap is the Harmony postfix in
-/// <see cref="PlacePatch"/>.
+/// initialize, the tool stays inert: no item, no stakes, no snap. The actual snap is the Harmony
+/// postfix in <see cref="PlacePatch"/>.
 /// </summary>
 public class MasonLineMod : SonsMod
 {
@@ -25,7 +25,7 @@ public class MasonLineMod : SonsMod
     {
         RenderablePatch.Install(HarmonyInstance);   // heisen-crash guard v2: mute OnEnable Invoke for our item
         // register the ItemData as early as possible: the save's inventory deserializes BEFORE
-        // OnAfterSpawn, and unknown ItemIds are dropped (cold-start bundle loss,). The
+        // OnAfterSpawn, and unknown ItemIds are dropped (cold-start bundle loss). The
         // SaveGameManager.Load prefix (SavePathPatch) retries right before deserialize as a backstop.
         MasonLineConfig.Init();
         LineTool.ApplyConfig();
