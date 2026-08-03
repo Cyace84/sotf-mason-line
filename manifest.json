@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/ToniMacaroni/RedLoader/main/MetadataSchema.json",
   "id": "MasonLine",
   "author": "cyace84",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Craftable guide line (2 sticks + 1 rope). Stretch it between two stakes and loose ground placements snap to it, so the first log of a wall lands straight. Hold Dismantle on a stake to collect.",
   "type": "Mod",
   "gameVersion": "2.0.0",
