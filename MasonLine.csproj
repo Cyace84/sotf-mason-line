@@ -6,7 +6,6 @@
     <Nullable>enable</Nullable>
     <AssemblyName>MasonLine</AssemblyName>
     <RootNamespace>MasonLine</RootNamespace>
-    <Version>1.0.1</Version>
     <Description>A straight guide line for Sons of the Forest: the build ghost of a free log snaps to it, so the first log of a wall lays dead-straight.</Description>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

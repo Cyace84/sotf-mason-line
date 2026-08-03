@@ -14,19 +14,15 @@ cd "$ROOT_DIR"
 export PATH="$HOME/.dotnet:$PATH" DOTNET_ROOT="$HOME/.dotnet"
 
 VERSION="$(python3 -c 'import json; print(json.load(open("manifest.json"))["version"])')"
-CSPROJ_VERSION="$(sed -n 's|.*<Version>\(.*\)</Version>.*|\1|p' MasonLine.csproj)"
-if [ "$VERSION" != "$CSPROJ_VERSION" ]; then
-    # The loader reads manifest.json, but the number baked into the dll is what a player sees in the
-    # file properties and what the build logs carry. They drifted apart once already, silently.
-    echo "version mismatch: manifest.json says $VERSION, MasonLine.csproj says $CSPROJ_VERSION" >&2
-    exit 1
-fi
 PACKAGE_NAME="MasonLine-$VERSION"
 STAGE_DIR="dist/$PACKAGE_NAME"
 ARCHIVE="dist/$PACKAGE_NAME.zip"
 
 rm -rf "$STAGE_DIR" "$ARCHIVE"
-dotnet build -c Release | tail -3
+# The version is passed in rather than kept in the csproj: manifest.json is the only place it is
+# written, so the dll and the loader cannot disagree. A plain `dotnet build` gets the MSBuild
+# default, which is fine because a local build is never what ships.
+dotnet build -c Release -p:Version="$VERSION" | tail -3
 mkdir -p "$STAGE_DIR/Mods/MasonLine"
 cp bin/Release/MasonLine.dll "$STAGE_DIR/Mods/MasonLine.dll"
 cp manifest.json "$STAGE_DIR/Mods/MasonLine/manifest.json"
