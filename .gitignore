@@ -6,3 +6,6 @@ lib
 
 # crash logs / old build artifacts kept locally as recon evidence, not shipped
 backups/
+
+# nexus gallery/banner sources and the raw capture: too heavy for git, uploaded by hand
+media/
