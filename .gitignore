@@ -9,3 +9,6 @@ backups/
 
 # nexus gallery/banner sources and the raw capture: too heavy for git, uploaded by hand
 media/
+
+# release archives, built by hand from bin/Release, uploaded to Nexus
+dist/
