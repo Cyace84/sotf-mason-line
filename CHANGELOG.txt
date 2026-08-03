@@ -1,0 +1,7 @@
+1.0.1
+The archive now carries its own Mods folder and is unpacked into the game folder, the way RedLoader's own install instructions describe. The 1.0.0 zip had the dll at its root and only installed correctly for someone following this mod's own wording.
+The manifest blurb said the recipe was one stick and a rope. It is two sticks and one rope.
+No gameplay changes.
+
+1.0.0
+First release.
