@@ -20,8 +20,14 @@ internal static partial class GuideLine
     private const float StakeThick = 1.96f;
     private const float StakeLong = 2.7f;
     // Rope/knot tie point relative to the aimed ground point: knot sits 0.75 above the stake GO,
-    // which itself sits StakeHeight*0.5 above ground, +0.02 world-X nudge (all user-tuned).
-    private static readonly Vector3 TieOffset = new Vector3(0.02f, StakeHeight * 0.5f + 0.75f, 0f);
+    // which itself sits StakeHeight*0.5 above ground. Purely vertical on purpose — this used to carry
+    // a 0.02 world-X nudge, which was really a correction for the knot MESH sitting off its pivot.
+    // A world-axis correction only lands right for one line direction: the knot is rotated to face
+    // the rope, so as the line turns, the same 2 cm swings from "along" to "across" and the knot
+    // visibly drifts off the rope end (first line perfect, the next ones slightly off). Measured on
+    // two lines 120 degrees apart, reproducing that nudge would have needed -0.029 and -0.006
+    // sideways — no single world offset exists, which is why it moved to KnotLocalOffset below.
+    private static readonly Vector3 TieOffset = new Vector3(0f, StakeHeight * 0.5f + 0.75f, 0f);
     private const float RopeRadius = 0.018f;
     private const int RopeSides = 8;
     /// <summary>UV v-units per meter along the rope, tuned by eye against the knot mesh it meets.
@@ -31,6 +37,14 @@ internal static partial class GuideLine
     private const int RopeSegments = 24;
     private const float SagFraction = 0.06f;
     private const float KnotScale = 0.8f;
+    /// <summary>Mesh-pivot correction for the knot, in the knot's OWN axes (X across the rope,
+    /// Y up, Z along it), so it holds at any line direction. Live-tuned (./tune.sh knotrel) on two
+    /// lines at different angles — the tuner moves every knot at once, so the second line was
+    /// re-planted to watch a fresh one react. Across the rope both settled on -0.01 independently.
+    /// Along it they ended at +0.01 and +0.03 and both read fine, which says the axis is forgiving:
+    /// the rope end sits inside the knot mesh, so a couple of centimetres there is invisible. Hence
+    /// the measured +0.01 from the freshly planted line rather than any average.</summary>
+    private static readonly Vector3 KnotLocalOffset = new Vector3(-0.01f, 0f, 0.01f);
 
     private static readonly Color WoodColor = new Color(0.40f, 0.27f, 0.15f);
 
@@ -303,6 +317,7 @@ internal static partial class GuideLine
         if (rmat != null) knot.GetComponent<Renderer>().sharedMaterial = rmat;
         knot.transform.localScale = Vector3.one * KnotScale;
         knot.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(dir, Vector3.up));
+        knot.transform.position += knot.transform.rotation * KnotLocalOffset;   // after the rotation: correction is in knot space
         return knot;
     }
 

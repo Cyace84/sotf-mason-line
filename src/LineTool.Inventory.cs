@@ -142,6 +142,12 @@ internal static partial class LineTool
     private static readonly Vector3 MatDisplayEuler = new Vector3(83.7f, 234.2f, 0.6f);
     private const float MatDisplayScale = 1.4f;   // layout item already scales up ~1.7x; keep this modest
 
+    // The freshly crafted stick sat too low on the mat. Live-tuned (./tune.sh matpos) to +0.2 along the
+    // wrapper's local Z, which is "up the mat" once MatDisplayEuler has laid it flat. This prefab is
+    // shared with the backpack model, but ApplyWobblePose re-pins that instance to InvStakePos on every
+    // backpack opening, so the offset only ever shows on the crafting-result copy.
+    private static readonly Vector3 MatDisplayOffset = new Vector3(0f, 0f, 0.2f);
+
     /// <summary>The tool's look: a stake with a rope knot — the in-game branch mesh on the mat,
     /// a wood cylinder in hand and as the fallback.
     /// matDisplay=true nests the visual under a wrapper laid flat + enlarged for the inventory mat.</summary>
@@ -152,6 +158,7 @@ internal static partial class LineTool
         {
             var wrapper = new GameObject("StakeVisual");
             wrapper.transform.SetParent(parent, false);
+            wrapper.transform.localPosition = MatDisplayOffset;
             wrapper.transform.localRotation = Quaternion.Euler(MatDisplayEuler);
             wrapper.transform.localScale = Vector3.one * MatDisplayScale;
             host = wrapper.transform;
