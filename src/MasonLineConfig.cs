@@ -26,11 +26,11 @@ public static class MasonLineConfig
     public static ConfigEntry<float> SnapEndMargin { get; private set; } = null!;
     public static ConfigEntry<float> StakeMagnet { get; private set; } = null!;
     /// <summary>Guards the id below. Off means the default is used no matter what the file says, so
-    /// a half-typed number cannot take the kit away from someone who was only looking.
+    /// a half-typed number cannot take the bundle away from someone who was only looking.
     ///
     /// Kept out of the settings panel ([SettingsUiIgnore], honoured by SUI's reflection over this
     /// class): it is a repair knob for one rare case the log announces by name, and getting it wrong
-    /// costs the player every kit in the pack. A row in the panel invites a poke; a line in
+    /// costs the player every bundle in the pack. A row in the panel invites a poke; a line in
     /// MasonLine.cfg takes intent.</summary>
     [SettingsUiIgnore]
     public static ConfigEntry<bool> OverrideItemId { get; private set; } = null!;
