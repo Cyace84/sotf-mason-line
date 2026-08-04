@@ -79,7 +79,7 @@ dotnet build        # produces bin/Debug/MasonLine.dll
 
 ## Notes
 
-- **Co-op works, one line per player.** Tested in a peer-to-peer game, the kind you start from the Multiplayer menu. Everyone can plant lines, but a line belongs to whoever planted it: you see your own stakes, and only your own placements snap to them. The logs themselves are placed by the game as usual, so the wall everyone ends up looking at is the same one. Dedicated servers are untested. Reports welcome.
+- **Co-op works, and lines belong to whoever plants them.** Tested in a peer-to-peer game, the kind you start from the Multiplayer menu. You see your own stakes, and only your own placements snap to them. The logs themselves are placed by the game as usual, so the wall everyone ends up looking at is the same one. Dedicated servers are untested. Reports welcome.
 - Lines are not part of the save. Stake one out, save, and on loading that save the line is gone while its bundle is back in your pack.
 - Putting the tool away with only the first stake planted pulls that stake back out. Plant it again when you return; nothing is charged until a line is finished.
 - Ships three crash guards. Two are game-wide: one skips a vanilla impact sound when the collider would crash `Physics.ClosestPoint`, the other intercepts a renderable callback that faults on managed-injected items. The third only ever touches this mod's own item.

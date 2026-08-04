@@ -49,7 +49,7 @@ The mod ships three crash guards, and two of them are game-wide rather than spec
 
 [size=4][b]Notes[/b][/size]
 [list]
-[*]Co-op works, one line per player. Tested in a peer-to-peer game, the kind you start from the Multiplayer menu. Everyone can plant lines, but a line belongs to whoever planted it: you see your own stakes, and only your own placements snap to them. The logs themselves are placed by the game as usual, so the wall everyone ends up looking at is the same one. Dedicated servers are untested. Reports welcome.
+[*]Co-op works, and lines belong to whoever plants them. Tested in a peer-to-peer game, the kind you start from the Multiplayer menu. You see your own stakes, and only your own placements snap to them. The logs themselves are placed by the game as usual, so the wall everyone ends up looking at is the same one. Dedicated servers are untested. Reports welcome.
 [*]The cord is a visual guide, not a physical object. NPCs and the player walk through it.
 [*]Lines are not part of the save. Stake one out, save, and on loading that save the line is gone while its bundle is back in your pack.
 [*]Putting the tool away with only the first stake planted pulls that stake back out. Plant it again when you return; nothing is charged until a line is finished.
