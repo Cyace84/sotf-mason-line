@@ -88,6 +88,10 @@ dotnet build        # produces bin/Debug/MasonLine.dll
 
 Thanks to ToniMacaroni for [RedLoader and SonsSdk](https://github.com/ToniMacaroni/RedLoader), and to the BepInEx team for HarmonyX and Il2CppInterop, which the loader is built on.
 
+Thanks to Sinai for [UnityExplorer](https://github.com/sinai-dev/UnityExplorer) and to ToniMacaroni again for [the Sons of the Forest fork of it](https://github.com/ToniMacaroni/UnityExplorer_Sons). Its C# console takes an expression and the running game answers it on the spot. Nearly everything I know about how this game works came out of typing into it, and every number I quote was measured there before it was written down.
+
+The static side runs on radare2 with r2ghidra (Ghidra's decompiler as an r2 plugin), on Il2CppDumper and Cpp2IL for turning stripped metadata back into names, and on ILSpy for the managed assemblies. Thanks to everyone who keeps those alive.
+
 ## License
 
 MIT

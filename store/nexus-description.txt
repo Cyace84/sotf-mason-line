@@ -28,17 +28,8 @@ The mod menu writes [font=Courier New]UserData/MasonLine.cfg[/font].
 [/list]
 All three apply the moment you change them. The item id is a fourth setting, kept in the file only; see Compatibility below.
 
-[size=4][b]Compatibility[/b][/size]
-The bundle registers as item id 9417. If another mod already owns that id, Mason Line refuses to register rather than overwrite it, and the log says so: [font=Courier New]item id 9417 is already taken by ...[/font]. Open [font=Courier New]UserData/MasonLine.cfg[/font], set [font=Courier New]overrideItemId = true[/font] and [font=Courier New]itemId[/font] to another whole number above 1000, then restart the game. The id is read once at startup, so nothing changes until you do. It is kept out of the settings panel on purpose: it repairs a single rare case that the log names for you, and setting it by accident costs you every bundle in your pack.
-
-Bundles lying in your pack were written into the save under the old id and will not come back after the change. Bundles staked out as lines will: stake them out, save, then restart, and they are returned to your pack under the new id.
-
-The recipe cannot be moved. Mason Line puts 2 sticks + 1 rope on the crafting mat, and if another mod claims the same pair, the mat holds both recipes with no way to pick between them. Nothing breaks, but you may get the other mod's item instead of the bundle.
-
-[size=4][b]What it does under the hood[/b][/size]
-One Harmony postfix on [font=Courier New]TargetInfo.CalcRelativePlacePosition[/font]. When a free log's placement lands within 30 cm of a cord and between the two stakes, its position and axis get projected onto the line. The build preview, the check that decides whether the placement is allowed and the log that finally drops all read that one field. There is no grid involved, and nothing registers a snap node.
-
-The mod ships three crash guards, and two of them are game-wide rather than specific to the guide line. One patches [font=Courier New]ObjectPhysicsInteractionSfx.TryTriggerHardSurfaceImpact[/font] against a vanilla bug where [font=Courier New]Physics.ClosestPoint[/font] hits a non-convex mesh collider in the backpack physics callback and kills the process. The other intercepts a renderable callback that faults on items injected from managed code. The third only ever touches this mod's own item.
+[size=4][b]Multiplayer[/b][/size]
+Works in co-op, and only you need it. The mod only changes where your own placements land, so nobody else has to install anything. Lines belong to whoever plants them: you see your own stakes, and only your own placements snap to them. The logs are placed by the game as usual, so the wall everyone ends up looking at is the same one. Tested in a peer-to-peer game, the kind you start from the Multiplayer menu. Dedicated servers are untested. Reports welcome.
 
 [size=4][b]Install[/b][/size]
 [list=1]
@@ -47,9 +38,20 @@ The mod ships three crash guards, and two of them are game-wide rather than spec
 [*]Start the game. The recipe shows up on the crafting mat as Mason Line.
 [/list]
 
+[size=4][b]Compatibility[/b][/size]
+The bundle registers as item id 9417. If another mod already owns that id, Mason Line refuses to register rather than overwrite it, and the log says so: [font=Courier New]item id 9417 is already taken by ...[/font]. Open [font=Courier New]UserData/MasonLine.cfg[/font], set [font=Courier New]overrideItemId = true[/font] and [font=Courier New]itemId[/font] to another whole number above 1000, then restart the game. The id is read once at startup, so the new one applies from the next launch. It is kept out of the settings panel on purpose: it repairs a single rare case that the log names for you, and setting it by accident costs you every bundle in your pack.
+
+Bundles lying in your pack were written into the save under the old id and will not come back after the change. Bundles staked out as lines will: stake them out, save, then restart, and they are returned to your pack under the new id.
+
+The recipe cannot be moved. Mason Line puts 2 sticks + 1 rope on the crafting mat, and if another mod claims the same pair, the mat holds both recipes with no way to pick between them. Nothing breaks, but you may get the other mod's item instead of the bundle.
+
+[size=4][b]Under the hood[/b][/size]
+One Harmony postfix on [font=Courier New]TargetInfo.CalcRelativePlacePosition[/font]. When a free log's placement lands within 30 cm of a cord and between the two stakes, its position and axis get projected onto the line. The build preview, the check that decides whether the placement is allowed and the log that finally drops all read that one field. There is no grid involved, and nothing registers a snap node.
+
+The mod ships three crash guards, and two of them are game-wide rather than specific to the guide line. One patches [font=Courier New]ObjectPhysicsInteractionSfx.TryTriggerHardSurfaceImpact[/font] against a vanilla bug where [font=Courier New]Physics.ClosestPoint[/font] hits a non-convex mesh collider in the backpack physics callback and kills the process. The other intercepts a renderable callback that faults on items injected from managed code. The third only ever touches this mod's own item.
+
 [size=4][b]Notes[/b][/size]
 [list]
-[*]Co-op works, and lines belong to whoever plants them. Tested in a peer-to-peer game, the kind you start from the Multiplayer menu. You see your own stakes, and only your own placements snap to them. The logs themselves are placed by the game as usual, so the wall everyone ends up looking at is the same one. Dedicated servers are untested. Reports welcome.
 [*]The cord is a visual guide, not a physical object. NPCs and the player walk through it.
 [*]Lines are not part of the save. Stake one out, save, and on loading that save the line is gone while its bundle is back in your pack.
 [*]Putting the tool away with only the first stake planted pulls that stake back out. Plant it again when you return; nothing is charged until a line is finished.
@@ -63,3 +65,7 @@ Open an issue on [url=https://github.com/Cyace84/sotf-mason-line/issues]the GitH
 
 [size=4][b]Shout outs[/b][/size]
 Thanks to ToniMacaroni for [url=https://github.com/ToniMacaroni/RedLoader]RedLoader and SonsSdk[/url], and to the BepInEx team for HarmonyX and Il2CppInterop, which the loader is built on.
+
+Thanks to Sinai for [url=https://github.com/sinai-dev/UnityExplorer]UnityExplorer[/url] and to ToniMacaroni again for [url=https://github.com/ToniMacaroni/UnityExplorer_Sons]the Sons of the Forest fork of it[/url]. Its C# console takes an expression and the running game answers it on the spot. Nearly everything I know about how this game works came out of typing into it, and every number I quote was measured there before it was written down.
+
+The static side runs on radare2 with r2ghidra (Ghidra's decompiler as an r2 plugin), on Il2CppDumper and Cpp2IL for turning stripped metadata back into names, and on ILSpy for the managed assemblies. Thanks to everyone who keeps those alive.

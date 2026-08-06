@@ -4,7 +4,7 @@ Crafted from 2 sticks and 1 rope on the crafting mat.
 
 **Controls.** No custom keybinds. Left-click plants a stake, first A then B. Hold Dismantle (C by default) on a stake to collect the line and get the bundle back.
 
-**What snaps.** Logs flat or standing, standing sticks, campfires, rocks — anything you set down loose on open ground. Guidebook blueprints, the ghosts you fill in piece by piece, do not.
+**What snaps.** Logs flat or standing, standing sticks, campfires, rocks. Anything you set down loose on open ground. Guidebook blueprints, the ghosts you fill in piece by piece, do not.
 
 **Multiple lines.** Each bundle is one line and they all work at once; a log goes to the closest cord. Aim a new line's first stake at a standing one and it lands exactly on it, so a run can turn a corner. Squaring the angle between two lines is still your job.
 
@@ -16,6 +16,6 @@ Crafted from 2 sticks and 1 rope on the crafting mat.
 
 **Mod conflicts.** The bundle takes item id 9417. If another mod already owns it, Mason Line refuses to register rather than overwrite, and says so in the log; `UserData/MasonLine.cfg` can point it elsewhere.
 
-Bug reports: attach `_Redloader/Latest.log`. Thanks to ToniMacaroni for RedLoader and SonsSdk.
+Bug reports: attach `_Redloader/Latest.log`. Thanks to ToniMacaroni for RedLoader and SonsSdk, and to Sinai for UnityExplorer.
 
-Full description and source: [GitHub](https://github.com/Cyace84/sotf-mason-line) (MIT)
+Source and docs: [GitHub](https://github.com/Cyace84/sotf-mason-line) (MIT)
